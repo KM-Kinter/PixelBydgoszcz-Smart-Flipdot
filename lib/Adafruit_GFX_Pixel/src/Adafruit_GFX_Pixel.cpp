@@ -2,8 +2,9 @@
 #include <Pixel.hpp>
 #include "Adafruit_GFX_Pixel.hpp"
 
-Adafruit_Pixel::Adafruit_Pixel(PixelClass &pixel, uint16_t w) : _pixel(&pixel),
-                                                                Adafruit_GFX(w, 16)
+Adafruit_Pixel::Adafruit_Pixel(PixelClass &pixel, uint16_t w, uint8_t displayAddress) : _pixel(&pixel),
+                                                                Adafruit_GFX(w, 16),
+                                                                _displayAddress(displayAddress)
 {
 }
 
@@ -142,7 +143,17 @@ uint8_t Adafruit_Pixel::commitBufferToPage(int8_t bufferNo, int8_t pageNo)
         byteToHex(_packetBuffer[i], _messageBuffer, i * 2);
     }
 
-    return _pixel->displayDataBlock(0, _messageBuffer, packetLen * 2);
+    return _pixel->displayDataBlock(_displayAddress, _messageBuffer, packetLen * 2);
+}
+
+void Adafruit_Pixel::setBacklight(uint8_t level)
+{
+    _pixel->setBacklight(_displayAddress, level);
+}
+
+void Adafruit_Pixel::setBrightness(uint8_t level)
+{
+    _pixel->setBrightness(_displayAddress, level);
 }
 
 void Adafruit_Pixel::addBlockToDrawBuffer(uint16_t currCount, uint16_t &currByte, uint8_t &currNibble)
