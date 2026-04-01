@@ -13,6 +13,15 @@ Adafruit_Pixel Pixel_GFX(Pixel, 84, 1); // Address 1
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "ntp.nask.pl", 7200); // 7200 = GMT+2 (Summer Poland)
 
+void printCentered(const String& text, int y = 14) {
+  int16_t x1, y1;
+  uint16_t w, h;
+  Pixel_GFX.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+  int x = (84 - w) / 2;
+  Pixel_GFX.setCursor(x, y);
+  Pixel_GFX.print(text);
+}
+
 void setup() {
   Serial.begin(115200);
   Serial2.begin(19200, SERIAL_8E1, 19, 18);
@@ -21,12 +30,10 @@ void setup() {
   Serial.println("\n--- Phase 1: WiFi & NTP (NASK) ---");
   Pixel_GFX.init();
   
-  // Show "WIFI" while waiting for connection
   Pixel_GFX.selectBuffer(0);
   Pixel_GFX.fillScreen(0);
   Pixel_GFX.setFont(&FreeSerif9pt7b);
-  Pixel_GFX.setCursor(0, 14);
-  Pixel_GFX.print("WIFI...");
+  printCentered("WIFI...");
   Pixel_GFX.commitBufferToPage(0);
 
   WiFiManager wm;
@@ -39,21 +46,17 @@ void setup() {
   timeClient.begin();
   timeClient.forceUpdate();
   
-  // Clear Page 1 (to remove residual text)
-  // Serial.println("Clearing Page 1...");
-  // Pixel_GFX.selectBuffer(0);
-  // Pixel_GFX.fillScreen(0);
-  // Pixel_GFX.commitBufferToPage(1); 
-  
   delay(1000);
 }
 
 void loop() {
   static uint32_t lastNTP = 0;
-  if (millis() - lastNTP > 300000) { // Update NTP every 5 minutes
+  if (millis() - lastNTP > 300000) { // 5 min
     lastNTP = millis();
     timeClient.forceUpdate();
   }
+  
+  timeClient.update();
   time_t now = timeClient.getEpochTime();
   struct tm * timeinfo = localtime(&now);
 
@@ -62,7 +65,6 @@ void loop() {
   char dateStr[10];
   sprintf(dateStr, "%02d.%02d.%02d", timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year % 100);
 
-  // Alternate every 5 seconds
   static uint32_t lastToggle = 0;
   static bool showTime = true;
   if (millis() - lastToggle > 5000) {
@@ -70,15 +72,11 @@ void loop() {
     showTime = !showTime;
     
     String toShow = showTime ? String(timeStr) : String(dateStr);
-    Serial.print("Displaying: "); Serial.println(toShow);
     
     Pixel_GFX.selectBuffer(0);
     Pixel_GFX.fillScreen(0);
     Pixel_GFX.setFont(&FreeSerif9pt7b);
-    // Center a bit (Date is wider)
-    int cursorX = showTime ? 10 : 0;
-    Pixel_GFX.setCursor(cursorX, 14);
-    Pixel_GFX.print(toShow);
+    printCentered(toShow);
     Pixel_GFX.commitBufferToPage(0);
   }
 }
