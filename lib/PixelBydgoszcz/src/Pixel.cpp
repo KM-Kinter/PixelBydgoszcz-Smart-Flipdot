@@ -23,6 +23,12 @@ void PixelClass::end() {
     digitalWrite(_txEnPin, LOW);
 }
 
+void PixelClass::clearRxBuffer() {
+    while (_serial->available()) {
+        _serial->read();
+    }
+}
+
 void PixelClass::sendSpace(bool autoEnd) {
     beginTransmit();
     uint8_t bfr[2] = {0x20, 0x04};
@@ -39,7 +45,7 @@ void PixelClass::sendDblSpace(bool autoEnd) {
         endTransmit();
 }
 
-void PixelClass::sendCommand(byte displayNo, char *command) {
+void PixelClass::sendCommand(byte displayNo, const char *command) {
     if (displayNo > 7)
         return;
 
@@ -55,7 +61,7 @@ void PixelClass::sendCommand(byte displayNo, char *command) {
     endTransmit();
 }
 
-void PixelClass::sendCommandWithBuffer(uint8_t displayNo, char *command, uint8_t data[], uint16_t dataLength)
+void PixelClass::sendCommandWithBuffer(uint8_t displayNo, const char *command, uint8_t data[], uint16_t dataLength)
 {
     if (displayNo > 7)
         return;
@@ -95,7 +101,7 @@ uint8_t PixelClass::checkResponse(byte buffer[], uint16_t msgLength, uint16_t &s
             break;
     }
 
-    if (start == msgLength)
+    if (start == msgLength || (start + 9) >= msgLength)
     {
         start = 0xFFFF;
         return 0xFF;
@@ -103,6 +109,7 @@ uint8_t PixelClass::checkResponse(byte buffer[], uint16_t msgLength, uint16_t &s
 
     char nibble1 = buffer[start + 8];
     char nibble2 = buffer[start + 9];
+    // ...
 
     uint8_t errorCode = 0x00;
 
@@ -138,7 +145,8 @@ uint8_t PixelClass::checkResponse(byte buffer[], uint16_t msgLength, uint16_t &s
 /// @param length length of buffer
 /// @param responseMsgLength Length of resulting string, or 0xFFFF if failed to parse response
 /// @return display response code or 0xFF if parsing error occured
-uint8_t PixelClass::readStringCommand(uint8_t displayNo, char *command, char buffer[], uint16_t length, uint16_t& responseMsgLength) {
+uint8_t PixelClass::readStringCommand(uint8_t displayNo, const char *command, char buffer[], uint16_t length, uint16_t& responseMsgLength) {
+    clearRxBuffer();
     sendCommand(displayNo, command);
     byte respBuffer[length + 32];
     size_t responseLength = readResponse(respBuffer, length + 32);
@@ -191,9 +199,10 @@ uint8_t PixelClass::getAvailableCommands(uint8_t displayNo, char buffer[], uint1
 /// @return display status code (non zero is bad)
 uint8_t PixelClass::displayDataBlock(uint8_t displayNo, uint8_t buffer[], uint16_t length)
 {
-    sendCommandWithBuffer(0, "DDB", buffer, length);
-    uint8_t respBuffer[32];
-    size_t responseLength = readResponse(respBuffer, length + 32);
+    clearRxBuffer();
+    sendCommandWithBuffer(displayNo, "DDB", buffer, length);
+    uint8_t respBuffer[64];
+    size_t responseLength = readResponse(respBuffer, 64);
     uint16_t responseStart = 0;
     return checkResponse(respBuffer, responseLength, responseStart);
 }
@@ -209,6 +218,18 @@ void PixelClass::endTransmit()
     _serial->flush();
     digitalWrite(_txEnPin, LOW);
     digitalWrite(_rxEnPin, LOW);
+}
+
+void PixelClass::setBacklight(uint8_t displayNo, uint8_t level) {
+    char cmd[8];
+    sprintf(cmd, "*L%d", level % 3);
+    sendCommand(displayNo, cmd);
+}
+
+void PixelClass::setBrightness(uint8_t displayNo, uint8_t level) {
+    char cmd[8];
+    sprintf(cmd, "*B%d", level % 10);
+    sendCommand(displayNo, cmd);
 }
 
 uint16_t PixelClass::getCrc(uint8_t buffer[], uint32_t len)

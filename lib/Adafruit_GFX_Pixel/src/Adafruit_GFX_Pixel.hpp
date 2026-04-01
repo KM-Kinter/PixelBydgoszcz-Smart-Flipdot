@@ -10,7 +10,7 @@
 
 class Adafruit_Pixel : public Adafruit_GFX {
     public:
-        Adafruit_Pixel(PixelClass &pixel, uint16_t w);
+        Adafruit_Pixel(PixelClass &pixel, uint16_t w, uint8_t displayAddress = 1);
         ~Adafruit_Pixel(void);
 
         void init();
@@ -19,10 +19,14 @@ class Adafruit_Pixel : public Adafruit_GFX {
         void drawPixel(int16_t x, int16_t y, uint16_t color);
 
         uint8_t commitBufferToPage(int8_t bufferNo = -1, int8_t pageNo = -1);
+        
+        void setBacklight(uint8_t level);
+        void setBrightness(uint8_t level);
 
     private:
         PixelClass *_pixel = NULL;
 
+        uint8_t _displayAddress = 1;
         uint8_t _currentBuffer = 0;
 
         uint16_t* _buffers[PIXEL_BUFFER_CNT];
