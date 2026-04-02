@@ -28,9 +28,9 @@ int rotationSpeed = 20;
 bool forceRefresh = false;
 
 // Fonts - maximum size for Clock/Date and minimal for Text
-#define FONT_TEXT u8g2_font_6x13_tf         // Narrow, supports Polish
-#define FONT_CLOCK u8g2_font_logisoso16_tn  // Large, 16px high numbers
-#define FONT_DATE u8g2_font_logisoso16_tf   // Large, 16px high proportional
+#define FONT_TEXT u8g2_font_unifont_t_polish    // Supports Polish
+#define FONT_CLOCK u8g2_font_logisoso16_tn      // Large, 16px high numbers
+#define FONT_DATE u8g2_font_logisoso16_tf       // Large, 16px high proportional
 
 void saveConfig() {
   File f = LittleFS.open("/config.txt", "w");
@@ -102,7 +102,7 @@ void setup() {
 
   Pixel_GFX.selectBuffer(0);
   Pixel_GFX.fillScreen(0);
-  u8g2_gfx.setFont(FONT_TEXT);
+  u8g2_gfx.setFont(FONT_TEXT); 
   drawUTF8Centered("WiFi...");
   Pixel_GFX.commitBufferToPage(0);
 
@@ -120,11 +120,15 @@ void setup() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     String playlistJson = "[";
     for (size_t i=0; i<playlist.size(); i++) {
-        playlistJson += "\"" + playlist[i] + "\"" + (i == playlist.size()-1 ? "" : ",");
+        String s = playlist[i];
+        s.replace("\"", "\\\"");
+        playlistJson += "\"" + s + "\"" + (i == playlist.size()-1 ? "" : ",");
     }
     playlistJson += "]";
 
-    String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
+    String html = "<!DOCTYPE html><html lang='pl'><head>"
+                  "<meta charset='UTF-8'>"
+                  "<meta name='viewport' content='width=device-width, initial-scale=1'>"
                   "<style>"
                   "body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;text-align:center;padding:15px;line-height:1.5;}"
                   "h1{color:#58a6ff;margin-bottom:20px;font-weight:600;font-size:1.8em;letter-spacing:-0.5px;}"
@@ -220,7 +224,7 @@ void loop() {
   struct tm * timeinfo = localtime(&now);
 
   char timeStr[6]; sprintf(timeStr, "%02d:%02d", timeinfo->tm_hour, timeinfo->tm_min);
-  char dateStr[11]; sprintf(dateStr, "%02d.%02d.%02d", timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year % 100);
+  char dateStr[9]; sprintf(dateStr, "%02d.%02d.%02d", timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year % 100);
 
   static uint32_t lastToggle = 0;
   static int masterIdx = 0; 
