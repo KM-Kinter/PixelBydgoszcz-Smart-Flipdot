@@ -107,10 +107,9 @@ void loadConfig() {
       showAnalogClock = f.readStringUntil('\n').toInt();
       showCombine = f.readStringUntil('\n').toInt();
       showDrawing = f.readStringUntil('\n').toInt();
-      systemOn = f.readStringUntil('\n').toInt();
-      showNightMode = f.readStringUntil('\n').toInt();
-      String rotStr = f.readStringUntil('\n');
-      rotStr.trim();
+      String s8 = f.readStringUntil('\n'); s8.trim(); if(s8.length()>0) systemOn = s8.toInt(); else systemOn = true;
+      String s9 = f.readStringUntil('\n'); s9.trim(); if(s9.length()>0) showNightMode = s9.toInt(); else showNightMode = true;
+      String rotStr = f.readStringUntil('\n'); rotStr.trim();
       if (rotStr.length() > 0) rotationSpeed = rotStr.toInt();
       
       for (int i = 0; i < 84; i++) {
@@ -202,7 +201,10 @@ void setup() {
   }
 
   timeClient.begin();
-  timeClient.forceUpdate();
+  Serial.print("Sync Time");
+  for(int i=0; i<10 && !timeClient.update(); i++){ delay(500); Serial.print("."); }
+  Serial.println(" OK");
+  forceRefresh = true;
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     String playlistJson = "[";
@@ -230,8 +232,8 @@ void setup() {
                   ".container{width:100%;max-width:1000px;}"
                   ".section-title{font-size:0.8em;color:var(--sub);text-transform:uppercase;margin:40px 0 15px;font-weight:bold;letter-spacing:1.5px;text-align:left;width:100%;}"
                   
-                  ".tile-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:12px;width:100%;}"
-                  ".tile{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 10px;cursor:pointer;text-align:center;transition:0.2s cubic-bezier(0.4,0,0.2,1);position:relative;display:flex;flex-direction:column;gap:10px;user-select:none;}"
+                  ".tile-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(105px, 1fr));gap:8px;width:100%;}"
+                  ".tile{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px 5px;cursor:pointer;text-align:center;transition:0.2s cubic-bezier(0.4,0,0.2,1);position:relative;display:flex;flex-direction:column;gap:8px;user-select:none;}"
                   ".tile:hover{border-color:var(--sub);background:#1c2128;}"
                   ".tile.active{background:rgba(35, 134, 54, 0.15);border-color:#2ea043;box-shadow:0 0 15px rgba(35,134,54,0.1);}"
                   ".tile.active .icon svg{stroke:#3fb950;}"
@@ -257,8 +259,8 @@ void setup() {
                   
                   ".speed-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;margin-top:20px;}"
                   ".switch{position:relative;display:inline-block;width:40px;height:22px;}.switch input{opacity:0;width:0;height:0;}"
-                  ".slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#30363d;transition:.3s;border-radius:22px;border:1px solid var(--border);}"
-                  ".slider:before{position:absolute;content:\"\";height:14px;width:14px;left:3px;bottom:3px;background:var(--sub);transition:.3s;border-radius:50%;}"
+                  ".slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(248,81,73,0.1);transition:.3s;border-radius:22px;border:1px solid var(--red);}"
+                  ".slider:before{position:absolute;content:\"\";height:14px;width:14px;left:3px;bottom:3px;background:var(--red);transition:.3s;border-radius:50%;}"
                   "input:checked+.slider{background:rgba(35,134,54,0.1);border-color:var(--green);}input:checked+.slider:before{transform:translateX(18px);background:var(--green);}"
                   ".footer{margin-top:50px;padding:20px;color:var(--sub);font-size:0.95em;border-top:1px solid var(--border);width:100%;max-width:1000px;text-align:center;}"
                   ".footer a{color:#79c0ff;text-decoration:none;font-weight:600;}"
@@ -267,14 +269,16 @@ void setup() {
                   
                   " <div style='display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:5px;'>"
                   "  <h1 style='text-align:left;margin:0;'>Smart Flipdot</h1>"
-                  "  <label class='switch'><input type='checkbox' id='pwr' " + String(systemOn?"checked":"") + " onclick='togglePower()'><span class='slider'></span></label>"
+                  "  <div style='display:flex;align-items:center;gap:6px;'>"
+                  "    <span style='font-size:0.7em;color:var(--sub);font-weight:bold;'>OFF</span>"
+                  "    <label class='switch'><input type='checkbox' id='pwr' " + String(systemOn?"checked":"") + " onclick='togglePower()'><span class='slider'></span></label>"
+                  "    <span style='font-size:0.7em;color:var(--sub);font-weight:bold;'>ON</span>"
+                  "  </div>"
                   " </div>"
                   " <div class='subtitle' style='text-align:left;'>Pixel v4.9 | <a href='http://flipdot.local'>flipdot.local</a></div>"
                   " <form action='/save' method='POST' id='mainForm'>"
                   " <div class='section-title'>Control Panel</div>"
                   " <div class='tile-grid'>"
-                  "  <div class='tile " + String(showNightMode?"active":"") + "' onclick='toggleTile(this)'>"
-                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'/></svg></div><span class='label'>Night Mode</span><input type='checkbox' name='c8' " + String(showNightMode?"checked":"") + "></div>"
                   "  <div class='tile " + String(showClock?"active":"") + "' onclick='toggleTile(this)'>"
                   "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></div><span class='label'>Digital</span><input type='checkbox' name='c1' " + String(showClock?"checked":"") + "></div>"
                   "  <div class='tile " + String(showAnalogClock?"active":"") + "' onclick='toggleTile(this)'>"
@@ -289,6 +293,8 @@ void setup() {
                   "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='5'/><path d='M12 1v2'/><path d='M12 21v2'/><path d='M4.22 4.22l1.42 1.42'/><path d='M18.36 18.36l1.42 1.42'/><path d='M1 12h2'/><path d='M21 12h2'/><path d='M4.22 19.78l1.42-1.42'/><path d='M18.36 5.64l1.42-1.42'/></svg></div><span class='label'>Weather</span><input type='checkbox' name='c4' " + String(showWeather?"checked":"") + "></div>"
                   "  <div class='tile " + String(showCustom?"active":"") + "' onclick='toggleTile(this)'>"
                   "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg></div><span class='label'>Messages</span><input type='checkbox' name='c3' " + String(showCustom?"checked":"") + "></div>"
+                  "  <div class='tile " + String(showNightMode?"active":"") + "' onclick='toggleTile(this)'>"
+                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'/></svg></div><span class='label'>Night Mode</span><input type='checkbox' name='c8' " + String(showNightMode?"checked":"") + "></div>"
                   " </div>"
 
                   " <div class='section-title'>Drawing Board</div>"
@@ -562,6 +568,12 @@ void loop() {
   int m = timeinfo->tm_min;
 
   if (!systemOn) { forceRefresh = false; return; }
+
+  static int lastAutoNight = -1;
+  if (h == 22 && lastAutoNight != timeinfo->tm_mday) {
+    showNightMode = true; lastAutoNight = timeinfo->tm_mday;
+    forceRefresh = true;
+  }
 
   // Schedules
   int currentInterval = rotationSpeed * 1000;
