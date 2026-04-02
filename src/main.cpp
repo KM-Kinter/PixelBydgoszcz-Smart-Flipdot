@@ -24,13 +24,13 @@ std::vector<String> playlist = {"Hello"};
 bool showClock = true;
 bool showDate = true;
 bool showCustom = true;
-int rotationSpeed = 10; 
+int rotationSpeed = 20; 
 bool forceRefresh = false;
 
-// Fonts - Proportional fonts look much better and symbols are balanced
-#define FONT_TEXT u8g2_font_helvB10_tf        // Proportional, 10px high (fits Polish)
-#define FONT_CLOCK u8g2_font_logisoso16_tn   // Numeric only, 16px high
-#define FONT_DATE u8g2_font_helvB12_tf        // Proportional, 12px high
+// Fonts - maximum size for Clock/Date and minimal for Text
+#define FONT_TEXT u8g2_font_6x13_tf         // Narrow, supports Polish
+#define FONT_CLOCK u8g2_font_logisoso16_tn  // Large, 16px high numbers
+#define FONT_DATE u8g2_font_logisoso16_tf   // Large, 16px high proportional
 
 void saveConfig() {
   File f = LittleFS.open("/config.txt", "w");
@@ -256,8 +256,8 @@ void loop() {
       Serial.println("Updating display: " + toShow);
       Pixel_GFX.selectBuffer(0);
       Pixel_GFX.fillScreen(0);
-      // Dynamic baseline: Helvetica high fonts need 15, text needs 13
-      int yPos = (u8g2_gfx.getFontAscent() > 14 ? 15 : 13);
+      // yPos: 15 for Clock/Date (max height), 13 for narrow text (baseline)
+      int yPos = (u8g2_gfx.getFontAscent() > 13 ? 15 : 13);
       drawUTF8Centered(toShow, yPos);
       Pixel_GFX.commitBufferToPage(0);
       delay(200); 
