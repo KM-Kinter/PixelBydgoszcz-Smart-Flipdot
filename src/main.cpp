@@ -7,6 +7,7 @@
 #include <Pixel.hpp>
 #include <Adafruit_GFX_Pixel.hpp>
 #include <U8g2_for_Adafruit_GFX.h>
+#include "WeatherHelper.h"
 
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
@@ -25,8 +26,12 @@ std::vector<String> playlist = {"Hello"};
 bool showClock = true;
 bool showDate = true;
 bool showCustom = true;
+bool showWeather = true;
 int rotationSpeed = 20; 
 bool forceRefresh = false;
+
+WeatherData currentWeather = {0, 0, false};
+uint32_t lastWeatherUpdate = 0;
 
 // Fonts - maximum size for Clock/Date and minimal for Text
 #define FONT_TEXT u8g2_font_unifont_t_polish    // Supports Polish
@@ -69,6 +74,7 @@ void saveConfig() {
     f.println(showClock);
     f.println(showDate);
     f.println(showCustom);
+    f.println(showWeather);
     f.println(rotationSpeed);
     for (const String& s : playlist) {
       if (s.length() > 0) f.println(s);
@@ -85,6 +91,7 @@ void loadConfig() {
       showClock = f.readStringUntil('\n').toInt();
       showDate = f.readStringUntil('\n').toInt();
       showCustom = f.readStringUntil('\n').toInt();
+      showWeather = f.readStringUntil('\n').toInt();
       String rotStr = f.readStringUntil('\n');
       if (rotStr.length() > 0) rotationSpeed = rotStr.toInt();
       if (rotationSpeed < 2) rotationSpeed = 2;
@@ -195,12 +202,13 @@ void setup() {
                   "a{color:#58a6ff;text-decoration:none;}a:hover{text-decoration:underline;}"
                   "</style></head><body>"
                   "<h1>Smart Flipdot</h1>"
-                  "<div class='subtitle'>Pixel v2.8 | <a href='http://flipdot.local'>flipdot.local</a></div>"
+                  "<div class='subtitle'>Pixel v3.8 | <a href='http://flipdot.local'>flipdot.local</a></div>"
                   "<form id='configForm' action='/save' method='POST'>"
                   "<div class='card'>"
                   "<div class='section-title'>Control</div>"
                   "<div class='row'><span>Clock</span><label class='switch'><input type='checkbox' name='c1' " + String(showClock?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Date</span><label class='switch'><input type='checkbox' name='c2' " + String(showDate?"checked":"") + "><span class='slider'></span></label></div>"
+                  "<div class='row'><span>Weather</span><label class='switch'><input type='checkbox' name='c4' " + String(showWeather?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Playlist</span><label class='switch'><input type='checkbox' name='c3' " + String(showCustom?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Rotation (sec)</span><input type='number' name='speed' value='" + String(rotationSpeed) + "' style='width:80px;'></div>"
                   "<div class='section-title'>Messages</div>"
@@ -234,6 +242,7 @@ void setup() {
     showClock = request->hasParam("c1", true);
     showDate = request->hasParam("c2", true);
     showCustom = request->hasParam("c3", true);
+    showWeather = request->hasParam("c4", true);
     if (request->hasParam("speed", true)) rotationSpeed = request->getParam("speed", true)->value().toInt();
     if (rotationSpeed < 2) rotationSpeed = 2;
 
@@ -263,6 +272,11 @@ void loop() {
   static uint32_t lastNTP = 0;
   if (millis() - lastNTP > 3600000) { lastNTP = millis(); timeClient.forceUpdate(); }
   
+  if (WiFi.status() == WL_CONNECTED && (millis() - lastWeatherUpdate > 300000 || lastWeatherUpdate == 0)) {
+    lastWeatherUpdate = millis();
+    currentWeather = WeatherHelper::getWSWWeather();
+  }
+  
   timeClient.update();
   time_t now = timeClient.getEpochTime();
   struct tm * timeinfo = localtime(&now);
@@ -280,7 +294,7 @@ void loop() {
     String toShow = "";
     int attempts = 0;
     while (attempts < 20) {
-        masterIdx = (masterIdx + 1) % (2 + (playlist.size() > 0 ? playlist.size() : 1));
+        masterIdx = (masterIdx + 1) % (3 + playlist.size());
         
         if (masterIdx == 0 && showClock) { 
             u8g2_gfx.setFont(FONT_CLOCK);
@@ -290,9 +304,13 @@ void loop() {
             u8g2_gfx.setFont(FONT_DATE);
             toShow = dateStr; break; 
         }
-        if (masterIdx >= 2 && showCustom) {
-            int pIdx = masterIdx - 2;
-            if (pIdx >= 0 && pIdx < playlist.size()) { 
+        if (masterIdx == 2 && showWeather && currentWeather.valid) {
+            // Weather screen handled specially
+            break;
+        }
+        if (masterIdx >= 3 && showCustom) {
+            int pIdx = masterIdx - 3;
+            if (pIdx >= 0 && pIdx < (int)playlist.size()) { 
                 u8g2_gfx.setFont(FONT_TEXT);
                 toShow = playlist[pIdx]; break; 
             }
@@ -300,7 +318,35 @@ void loop() {
         attempts++;
     }
 
-    if (toShow != "") {
+    if (masterIdx == 2 && showWeather && currentWeather.valid) {
+        Serial.println("Updating display: Weather");
+        Pixel_GFX.selectBuffer(0);
+        Pixel_GFX.fillScreen(0);
+        
+        const uint8_t* icon = WeatherHelper::getIconForCode(currentWeather.code, currentWeather.is_day, currentWeather.wind_speed);
+        Pixel_GFX.drawXBitmap(0, 0, icon, 16, 16, 1);
+        
+        u8g2_gfx.setFont(u8g2_font_unifont_t_polish);
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%.1f", currentWeather.temp);
+        String tNum = String(buf);
+        int wNum = u8g2_gfx.getUTF8Width(tNum.c_str());
+        int wC = u8g2_gfx.getUTF8Width("C");
+        int totalW = wNum + 5 + wC; // 5 = gap(1) + circle(3) + gap(1)
+        
+        int startX = 83 - totalW; // Leaves 1px empty on the right (pixel 83)
+        
+        u8g2_gfx.setCursor(startX, 13); 
+        u8g2_gfx.print(tNum);
+        
+        int degX = startX + wNum + 1;
+        Pixel_GFX.drawCircle(degX + 1, 3, 1, 1);
+        u8g2_gfx.setCursor(degX + 4, 13);
+        u8g2_gfx.print("C");
+        
+        Pixel_GFX.commitBufferToPage(0);
+        delay(200);
+    } else if (toShow != "") {
       Serial.println("Updating display: " + toShow);
       Pixel_GFX.selectBuffer(0);
       Pixel_GFX.fillScreen(0);
