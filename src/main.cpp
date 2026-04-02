@@ -272,7 +272,7 @@ void loop() {
   static uint32_t lastNTP = 0;
   if (millis() - lastNTP > 3600000) { lastNTP = millis(); timeClient.forceUpdate(); }
   
-  if (WiFi.status() == WL_CONNECTED && (millis() - lastWeatherUpdate > 900000 || lastWeatherUpdate == 0)) {
+  if (WiFi.status() == WL_CONNECTED && (millis() - lastWeatherUpdate > 300000 || lastWeatherUpdate == 0)) {
     lastWeatherUpdate = millis();
     currentWeather = WeatherHelper::getWSWWeather();
   }
@@ -324,13 +324,24 @@ void loop() {
         Pixel_GFX.fillScreen(0);
         
         const uint8_t* icon = WeatherHelper::getIconForCode(currentWeather.code, currentWeather.is_day, currentWeather.wind_speed);
-        Pixel_GFX.drawXBitmap(2, 0, icon, 16, 16, 1);
+        Pixel_GFX.drawXBitmap(0, 0, icon, 16, 16, 1);
         
         u8g2_gfx.setFont(u8g2_font_logisoso16_tf);
-        String t = String((int)round(currentWeather.temp)) + "C";
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%.1f", currentWeather.temp);
+        String t = String(buf);
         int w = u8g2_gfx.getUTF8Width(t.c_str());
-        u8g2_gfx.setCursor(45 - w/2 + 18, 16); 
+        
+        // Draw temperature
+        u8g2_gfx.setCursor(18, 16); 
         u8g2_gfx.print(t);
+        
+        // Draw professional degree symbol and 'C'
+        // Degree symbol is a small 2x2 or 3x3 circle
+        int degX = 18 + w + 2;
+        Pixel_GFX.drawCircle(degX + 1, 3, 1, 1);
+        u8g2_gfx.setCursor(degX + 5, 16);
+        u8g2_gfx.print("C");
         
         Pixel_GFX.commitBufferToPage(0);
         delay(200);
