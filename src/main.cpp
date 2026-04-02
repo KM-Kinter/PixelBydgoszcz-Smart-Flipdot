@@ -28,6 +28,7 @@ bool showDate = true;
 bool showCustom = true;
 bool showWeather = true;
 bool showAnalogClock = true;
+bool showCombine = true;
 int rotationSpeed = 20; 
 bool forceRefresh = false;
 
@@ -77,6 +78,7 @@ void saveConfig() {
     f.println(showCustom);
     f.println(showWeather);
     f.println(showAnalogClock);
+    f.println(showCombine);
     f.println(rotationSpeed);
     for (const String& s : playlist) {
       if (s.length() > 0) f.println(s);
@@ -95,6 +97,7 @@ void loadConfig() {
       showCustom = f.readStringUntil('\n').toInt();
       showWeather = f.readStringUntil('\n').toInt();
       showAnalogClock = f.readStringUntil('\n').toInt();
+      showCombine = f.readStringUntil('\n').toInt();
       String rotStr = f.readStringUntil('\n');
       rotStr.trim();
       if (rotStr.length() > 0) {
@@ -125,9 +128,7 @@ void drawUTF8Centered(const String& text, int y = 14) {
   u8g2_gfx.print(text);
 }
 
-void drawAnalogClock(int h, int m) {
-  int cx = 42; 
-  int cy = 8;  
+void drawAnalogClock(int h, int m, int cx = 42, int cy = 8) {
   int r = 7;   
 
   Pixel_GFX.drawCircle(cx, cy, r, 1);
@@ -240,6 +241,7 @@ void setup() {
                   "<div class='row'><span>Date</span><label class='switch'><input type='checkbox' name='c2' " + String(showDate?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Weather</span><label class='switch'><input type='checkbox' name='c4' " + String(showWeather?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Analog Clock</span><label class='switch'><input type='checkbox' name='c5' " + String(showAnalogClock?"checked":"") + "><span class='slider'></span></label></div>"
+                  "<div class='row'><span>Combine Mode</span><label class='switch'><input type='checkbox' name='c6' " + String(showCombine?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Playlist</span><label class='switch'><input type='checkbox' name='c3' " + String(showCustom?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Rotation (sec)</span><input type='number' name='speed' value='" + String(rotationSpeed) + "' style='width:80px;'></div>"
                   "<div class='section-title'>Messages</div>"
@@ -275,6 +277,7 @@ void setup() {
     showCustom = request->hasParam("c3", true);
     showWeather = request->hasParam("c4", true);
     showAnalogClock = request->hasParam("c5", true);
+    showCombine = request->hasParam("c6", true);
     if (request->hasParam("speed", true)) rotationSpeed = request->getParam("speed", true)->value().toInt();
     if (rotationSpeed < 2) rotationSpeed = 2;
 
@@ -326,7 +329,7 @@ void loop() {
     String toShow = "";
     int attempts = 0;
     while (attempts < 20) {
-        masterIdx = (masterIdx + 1) % (4 + playlist.size());
+        masterIdx = (masterIdx + 1) % (5 + playlist.size());
         
         if (masterIdx == 0 && showClock) { 
             u8g2_gfx.setFont(FONT_CLOCK);
@@ -344,8 +347,12 @@ void loop() {
             // Analog clock handled specially
             break;
         }
-        if (masterIdx >= 4 && showCustom) {
-            int pIdx = masterIdx - 4;
+        if (masterIdx == 4 && showCombine) {
+            // Combine mode handled specially
+            break;
+        }
+        if (masterIdx >= 5 && showCustom) {
+            int pIdx = masterIdx - 5;
             if (pIdx >= 0 && pIdx < (int)playlist.size()) { 
                 u8g2_gfx.setFont(FONT_TEXT);
                 toShow = playlist[pIdx]; break; 
@@ -387,6 +394,25 @@ void loop() {
         Pixel_GFX.selectBuffer(0);
         Pixel_GFX.fillScreen(0);
         drawAnalogClock(timeinfo->tm_hour, timeinfo->tm_min);
+        Pixel_GFX.commitBufferToPage(0);
+        delay(200);
+    } else if (masterIdx == 4 && showCombine) {
+        Serial.println("Updating display: Combine");
+        Pixel_GFX.selectBuffer(0);
+        Pixel_GFX.fillScreen(0);
+        
+        u8g2_gfx.setFont(FONT_CLOCK);
+        int wDig = u8g2_gfx.getUTF8Width(timeStr);
+        int totalW = 14 + 4 + wDig; // Analog(14) + Gap(4) + Digital
+        int startX = (84 - totalW) / 2;
+        
+        // Draw Analog on Left
+        drawAnalogClock(timeinfo->tm_hour, timeinfo->tm_min, startX + 7, 8);
+        
+        // Draw Digital on Right
+        u8g2_gfx.setCursor(startX + 14 + 4, 16);
+        u8g2_gfx.print(timeStr);
+        
         Pixel_GFX.commitBufferToPage(0);
         delay(200);
     } else if (toShow != "") {
