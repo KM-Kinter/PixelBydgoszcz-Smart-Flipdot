@@ -29,7 +29,9 @@ bool showCustom = true;
 bool showWeather = true;
 bool showAnalogClock = true;
 bool showCombine = true;
+bool showDrawing = true;
 int rotationSpeed = 20; 
+uint16_t drawBoard[84]; // Persistent 84x16 drawing
 bool forceRefresh = false;
 
 WeatherData currentWeather = {0, 0, false};
@@ -79,7 +81,9 @@ void saveConfig() {
     f.println(showWeather);
     f.println(showAnalogClock);
     f.println(showCombine);
+    f.println(showDrawing);
     f.println(rotationSpeed);
+    for (int i = 0; i < 84; i++) f.println(drawBoard[i]);
     for (const String& s : playlist) {
       if (s.length() > 0) f.println(s);
     }
@@ -98,12 +102,14 @@ void loadConfig() {
       showWeather = f.readStringUntil('\n').toInt();
       showAnalogClock = f.readStringUntil('\n').toInt();
       showCombine = f.readStringUntil('\n').toInt();
+      showDrawing = f.readStringUntil('\n').toInt();
       String rotStr = f.readStringUntil('\n');
       rotStr.trim();
-      if (rotStr.length() > 0) {
-        rotationSpeed = rotStr.toInt();
-      } else {
-        rotationSpeed = 20; // Default if not found or empty
+      if (rotStr.length() > 0) rotationSpeed = rotStr.toInt();
+      
+      for (int i = 0; i < 84; i++) {
+        if (f.available()) drawBoard[i] = f.readStringUntil('\n').toInt();
+        else drawBoard[i] = 0;
       }
       if (rotationSpeed < 2) rotationSpeed = 2;
       
@@ -240,19 +246,69 @@ void setup() {
                   "<div class='row'><span>Digital Clock</span><label class='switch'><input type='checkbox' name='c1' " + String(showClock?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Analog Clock</span><label class='switch'><input type='checkbox' name='c5' " + String(showAnalogClock?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Analog + Digital Clock</span><label class='switch'><input type='checkbox' name='c6' " + String(showCombine?"checked":"") + "><span class='slider'></span></label></div>"
+                  "<div class='row'><span>Drawing Board</span><label class='switch'><input type='checkbox' name='c7' " + String(showDrawing?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Date</span><label class='switch'><input type='checkbox' name='c2' " + String(showDate?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Weather</span><label class='switch'><input type='checkbox' name='c4' " + String(showWeather?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Custom messages</span><label class='switch'><input type='checkbox' name='c3' " + String(showCustom?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Rotation (sec)</span><input type='number' name='speed' value='" + String(rotationSpeed) + "' style='width:80px;'></div>"
+                  "<div class='section-title'>Drawing Board</div>"
+                  "<div class='card' style='max-width:800px; overflow-x:auto;'>"
+                  "  <canvas id='paintCanvas' width='840' height='160' style='background:#000; border:2px solid #30363d; border-radius:4px; width:100%; cursor:crosshair;'></canvas>"
+                  "  <div style='margin-top:10px; display:flex; gap:10px;'>"
+                  "    <button type='button' class='add-btn' onclick='clearCanvas()' style='background:#f85149;'>CLEAR ALL</button>"
+                  "    <button type='button' class='add-btn' onclick='saveCanvas()'>SAVE AS PERMANENT</button>"
+                  "  </div>"
+                  "</div>"
                   "<div class='section-title'>Messages</div>"
                   "<div id='msgList'></div>"
                   "<div class='add-row'><input type='text' id='newMsg' placeholder='Write...'><button type='button' class='add-btn' onclick='addMsg()'>ADD TO LIST</button></div>"
                   "<input type='hidden' name='msgs' id='msgsInput'>"
-                  "<button type='submit' class='save-btn'>SAVE & UPDATE DISPLAY</button>"
+                  "<button type='submit' class='save-btn'>SAVE SETTINGS</button>"
                   "</div>"
                   "<div class='info-footer'>Connected to IP: " + WiFi.localIP().toString() + "</div>"
                   "</form>"
                   "<script>"
+                  "const canvas = document.getElementById('paintCanvas');"
+                  "const ctx = canvas.getContext('2d');"
+                  "const W = 84, H = 16, SCALE = 10;"
+                  "let drawing = false;"
+                  "let lastX = -1, lastY = -1;"
+                  "let board = Array(W).fill(0).map(() => Array(H).fill(0));"
+                  
+                  // Initial load from server-side bits if possible, or just start empty
+                  "function initBoard() {"
+                  "  ctx.fillStyle = '#000'; ctx.fillRect(0,0,840,160);"
+                  "  ctx.strokeStyle = '#222'; for(let i=0; i<=W; i++) { ctx.beginPath(); ctx.moveTo(i*SCALE,0); ctx.lineTo(i*SCALE,H*SCALE); ctx.stroke(); }"
+                  "  for(let i=0; i<=H; i++) { ctx.beginPath(); ctx.moveTo(0,i*SCALE); ctx.lineTo(W*SCALE,i*SCALE); ctx.stroke(); }"
+                  "}"
+                  
+                  "function setPixel(x, y, on) {"
+                  "  if (x < 0 || x >= W || y < 0 || y >= H) return;"
+                  "  if (board[x][y] === on) return;"
+                  "  board[x][y] = on;"
+                  "  ctx.fillStyle = on ? '#ffdd00' : '#000';"
+                  "  ctx.fillRect(x*SCALE+1, y*SCALE+1, SCALE-2, SCALE-2);"
+                  "  fetch(`/api/draw?x=${x}&y=${y}&on=${on}`);"
+                  "}"
+
+                  "function handleMove(e) {"
+                  "  if (!drawing) return;"
+                  "  const rect = canvas.getBoundingClientRect();"
+                  "  const x = Math.floor((e.clientX - rect.left) / (rect.width / W));"
+                  "  const y = Math.floor((e.clientY - rect.top) / (rect.height / H));"
+                  "  if (x !== lastX || y !== lastY) { setPixel(x, y, 1); lastX = x; lastY = y; }"
+                  "}"
+
+                  "canvas.onmousedown = (e) => { drawing = true; handleMove(e); };"
+                  "window.onmouseup = () => { drawing = false; lastX = -1; lastY = -1; };"
+                  "canvas.onmousemove = handleMove;"
+                  "canvas.ontouchstart = (e) => { drawing = true; handleMove(e.touches[0]); e.preventDefault(); };"
+                  "canvas.ontouchmove = (e) => { handleMove(e.touches[0]); e.preventDefault(); };"
+                  "canvas.ontouchend = () => { drawing = false; };"
+
+                  "function clearCanvas() { if(confirm('Clear?')) { fetch('/api/draw?clear=1').then(() => { board.forEach(c => c.fill(0)); initBoard(); }); } }"
+                  "function saveCanvas() { fetch('/api/draw?save=1').then(() => alert('Saved to Flash!')); }"
+
                   "let playlist = " + playlistJson + ";"
                   "function render() {"
                   "  const list = document.getElementById('msgList'); list.innerHTML = '';"
@@ -266,7 +322,7 @@ void setup() {
                   "}"
                   "function delMsg(i) { playlist.splice(i, 1); render(); }"
                   "document.getElementById('newMsg').addEventListener('keypress', (e) => { if(e.key === 'Enter') { e.preventDefault(); addMsg(); } });"
-                  "render();"
+                  "initBoard(); render();"
                   "</script></body></html>";
     request->send(200, "text/html", html);
   });
@@ -278,6 +334,7 @@ void setup() {
     showWeather = request->hasParam("c4", true);
     showAnalogClock = request->hasParam("c5", true);
     showCombine = request->hasParam("c6", true);
+    showDrawing = request->hasParam("c7", true);
     if (request->hasParam("speed", true)) rotationSpeed = request->getParam("speed", true)->value().toInt();
     if (rotationSpeed < 2) rotationSpeed = 2;
 
@@ -297,6 +354,38 @@ void setup() {
     saveConfig();
     forceRefresh = true;
     request->redirect("/");
+  });
+
+  server.on("/api/draw", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (request->hasParam("clear")) {
+        memset(drawBoard, 0, sizeof(drawBoard));
+        saveConfig();
+        forceRefresh = true;
+        request->send(200, "text/plain", "Cleared");
+        return;
+    }
+    if (request->hasParam("x") && request->hasParam("y") && request->hasParam("on")) {
+        int x = request->getParam("x")->value().toInt();
+        int y = request->getParam("y")->value().toInt();
+        int on = request->getParam("on")->value().toInt();
+        if (x >= 0 && x < 84 && y >= 0 && y < 16) {
+            if (on) drawBoard[x] |= (1 << y);
+            else drawBoard[x] &= ~(1 << y);
+            // Instant feedback: jump to drawing screen (masterIdx 5)
+            static uint32_t lastApiUpdate = 0;
+            if (millis() - lastApiUpdate > 500) { // Throttle re-renders and saves
+                lastApiUpdate = millis();
+                forceRefresh = true;
+                // We'll let loop() pick it up
+            }
+        }
+        request->send(200, "text/plain", "OK");
+    } else if (request->hasParam("save")) {
+        saveConfig();
+        request->send(200, "text/plain", "Saved");
+    } else {
+        request->send(400, "text/plain", "Bad Request");
+    }
   });
 
   server.begin();
@@ -329,7 +418,7 @@ void loop() {
     String toShow = "";
     int attempts = 0;
     while (attempts < 20) {
-        masterIdx = (masterIdx + 1) % (5 + playlist.size());
+        masterIdx = (masterIdx + 1) % (6 + playlist.size());
         
         if (masterIdx == 0 && showClock) { 
             u8g2_gfx.setFont(FONT_CLOCK);
@@ -351,8 +440,12 @@ void loop() {
             // Combine mode handled specially
             break;
         }
-        if (masterIdx >= 5 && showCustom) {
-            int pIdx = masterIdx - 5;
+        if (masterIdx == 5 && showDrawing) {
+            // Drawing screen
+            break;
+        }
+        if (masterIdx >= 6 && showCustom) {
+            int pIdx = masterIdx - 6;
             if (pIdx >= 0 && pIdx < (int)playlist.size()) { 
                 u8g2_gfx.setFont(FONT_TEXT);
                 toShow = playlist[pIdx]; break; 
@@ -415,6 +508,17 @@ void loop() {
         
         Pixel_GFX.commitBufferToPage(0);
         delay(200);
+    } else if (masterIdx == 5 && showDrawing) {
+        // Just draw the board
+        Pixel_GFX.selectBuffer(0);
+        Pixel_GFX.fillScreen(0);
+        for(int x=0; x<84; x++) {
+            for(int y=0; y<16; y++) {
+                if (drawBoard[x] & (1 << y)) Pixel_GFX.drawPixel(x, y, 1);
+            }
+        }
+        Pixel_GFX.commitBufferToPage(0);
+        delay(500); 
     } else if (toShow != "") {
       Serial.println("Updating display: " + toShow);
       Pixel_GFX.selectBuffer(0);
