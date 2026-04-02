@@ -8,6 +8,7 @@
 #include <Adafruit_GFX_Pixel.hpp>
 #include <U8g2_for_Adafruit_GFX.h>
 #include "WeatherHelper.h"
+#include "GameOfLife.h"
 
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
@@ -29,11 +30,13 @@ bool showCustom = true;
 bool showWeather = true;
 bool showAnalogClock = true;
 bool showCombine = true;
+bool showGoL = true;
 int rotationSpeed = 20; 
 bool forceRefresh = false;
 
 WeatherData currentWeather = {0, 0, false};
 uint32_t lastWeatherUpdate = 0;
+GameOfLife gol;
 
 // Fonts - maximum size for Clock/Date and minimal for Text
 #define FONT_TEXT u8g2_font_unifont_t_polish    // Supports Polish
@@ -79,6 +82,7 @@ void saveConfig() {
     f.println(showWeather);
     f.println(showAnalogClock);
     f.println(showCombine);
+    f.println(showGoL);
     f.println(rotationSpeed);
     for (const String& s : playlist) {
       if (s.length() > 0) f.println(s);
@@ -98,6 +102,7 @@ void loadConfig() {
       showWeather = f.readStringUntil('\n').toInt();
       showAnalogClock = f.readStringUntil('\n').toInt();
       showCombine = f.readStringUntil('\n').toInt();
+      showGoL = f.readStringUntil('\n').toInt();
       String rotStr = f.readStringUntil('\n');
       rotStr.trim();
       if (rotStr.length() > 0) {
@@ -240,6 +245,7 @@ void setup() {
                   "<div class='row'><span>Digital Clock</span><label class='switch'><input type='checkbox' name='c1' " + String(showClock?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Analog Clock</span><label class='switch'><input type='checkbox' name='c5' " + String(showAnalogClock?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Analog + Digital Clock</span><label class='switch'><input type='checkbox' name='c6' " + String(showCombine?"checked":"") + "><span class='slider'></span></label></div>"
+                  "<div class='row'><span>Game of Life</span><label class='switch'><input type='checkbox' name='c7' " + String(showGoL?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Date</span><label class='switch'><input type='checkbox' name='c2' " + String(showDate?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Weather</span><label class='switch'><input type='checkbox' name='c4' " + String(showWeather?"checked":"") + "><span class='slider'></span></label></div>"
                   "<div class='row'><span>Custom messages</span><label class='switch'><input type='checkbox' name='c3' " + String(showCustom?"checked":"") + "><span class='slider'></span></label></div>"
@@ -278,6 +284,7 @@ void setup() {
     showWeather = request->hasParam("c4", true);
     showAnalogClock = request->hasParam("c5", true);
     showCombine = request->hasParam("c6", true);
+    showGoL = request->hasParam("c7", true);
     if (request->hasParam("speed", true)) rotationSpeed = request->getParam("speed", true)->value().toInt();
     if (rotationSpeed < 2) rotationSpeed = 2;
 
@@ -320,6 +327,7 @@ void loop() {
   char dateStr[9]; sprintf(dateStr, "%02d.%02d.%02d", timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year % 100);
 
   static uint32_t lastToggle = 0;
+  static uint32_t lastAnim = 0;
   static int masterIdx = 0; 
   
   if (millis() - lastToggle > (rotationSpeed * 1000) || forceRefresh) {
@@ -329,7 +337,7 @@ void loop() {
     String toShow = "";
     int attempts = 0;
     while (attempts < 20) {
-        masterIdx = (masterIdx + 1) % (5 + playlist.size());
+        masterIdx = (masterIdx + 1) % (6 + playlist.size());
         
         if (masterIdx == 0 && showClock) { 
             u8g2_gfx.setFont(FONT_CLOCK);
@@ -351,8 +359,12 @@ void loop() {
             // Combine mode handled specially
             break;
         }
-        if (masterIdx >= 5 && showCustom) {
-            int pIdx = masterIdx - 5;
+        if (masterIdx == 5 && showGoL) {
+            gol.init();
+            break;
+        }
+        if (masterIdx >= 6 && showCustom) {
+            int pIdx = masterIdx - 6;
             if (pIdx >= 0 && pIdx < (int)playlist.size()) { 
                 u8g2_gfx.setFont(FONT_TEXT);
                 toShow = playlist[pIdx]; break; 
@@ -415,6 +427,16 @@ void loop() {
         
         Pixel_GFX.commitBufferToPage(0);
         delay(200);
+    } else if (masterIdx == 5 && showGoL) {
+        if (millis() - lastAnim > 500) {
+            lastAnim = millis();
+            Serial.println("Updating display: Game of Life");
+            Pixel_GFX.selectBuffer(0);
+            Pixel_GFX.fillScreen(0);
+            gol.render(Pixel_GFX);
+            Pixel_GFX.commitBufferToPage(0);
+            gol.update();
+        }
     } else if (toShow != "") {
       Serial.println("Updating display: " + toShow);
       Pixel_GFX.selectBuffer(0);
