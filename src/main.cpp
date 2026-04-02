@@ -326,20 +326,20 @@ void loop() {
         const uint8_t* icon = WeatherHelper::getIconForCode(currentWeather.code, currentWeather.is_day, currentWeather.wind_speed);
         Pixel_GFX.drawXBitmap(0, 0, icon, 16, 16, 1);
         
-        u8g2_gfx.setFont(u8g2_font_7x14_tf);
+        u8g2_gfx.setFont(u8g2_font_unifont_t_polish);
         char buf[16];
         snprintf(buf, sizeof(buf), "%.1f", currentWeather.temp);
         String t = String(buf);
         int w = u8g2_gfx.getUTF8Width(t.c_str());
         
-        // Draw temperature 
-        u8g2_gfx.setCursor(20, 14); 
+        // Draw temperature (centered vertically in the 16px space)
+        u8g2_gfx.setCursor(20, 15); 
         u8g2_gfx.print(t);
         
         // Draw professional degree symbol and 'C'
         int degX = 20 + w + 1;
         Pixel_GFX.drawCircle(degX + 1, 3, 1, 1);
-        u8g2_gfx.setCursor(degX + 5, 14);
+        u8g2_gfx.setCursor(degX + 5, 15);
         u8g2_gfx.print("C");
         
         Pixel_GFX.commitBufferToPage(0);
