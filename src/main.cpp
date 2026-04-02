@@ -202,7 +202,7 @@ void setup() {
                   "a{color:#58a6ff;text-decoration:none;}a:hover{text-decoration:underline;}"
                   "</style></head><body>"
                   "<h1>Smart Flipdot</h1>"
-                  "<div class='subtitle'>Pixel v2.8 | <a href='http://flipdot.local'>flipdot.local</a></div>"
+                  "<div class='subtitle'>Pixel v3.8 | <a href='http://flipdot.local'>flipdot.local</a></div>"
                   "<form id='configForm' action='/save' method='POST'>"
                   "<div class='card'>"
                   "<div class='section-title'>Control</div>"
@@ -329,17 +329,19 @@ void loop() {
         u8g2_gfx.setFont(u8g2_font_unifont_t_polish);
         char buf[16];
         snprintf(buf, sizeof(buf), "%.1f", currentWeather.temp);
-        String t = String(buf);
-        int w = u8g2_gfx.getUTF8Width(t.c_str());
+        String tNum = String(buf);
+        int wNum = u8g2_gfx.getUTF8Width(tNum.c_str());
+        int wC = u8g2_gfx.getUTF8Width("C");
+        int totalW = wNum + 5 + wC; // 5 = gap(1) + circle(3) + gap(1)
         
-        // Draw temperature (centered vertically: baseline adjusted from 15 to 13)
-        u8g2_gfx.setCursor(20, 13); 
-        u8g2_gfx.print(t);
+        int startX = 83 - totalW; // Leaves 1px empty on the right (pixel 83)
         
-        // Draw professional degree symbol and 'C'
-        int degX = 20 + w + 1;
+        u8g2_gfx.setCursor(startX, 13); 
+        u8g2_gfx.print(tNum);
+        
+        int degX = startX + wNum + 1;
         Pixel_GFX.drawCircle(degX + 1, 3, 1, 1);
-        u8g2_gfx.setCursor(degX + 5, 13);
+        u8g2_gfx.setCursor(degX + 4, 13);
         u8g2_gfx.print("C");
         
         Pixel_GFX.commitBufferToPage(0);
