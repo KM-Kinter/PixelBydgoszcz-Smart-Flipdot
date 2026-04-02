@@ -250,7 +250,7 @@ void setup() {
                   
                   ".speed-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;margin-top:20px;}"
                   ".footer{margin-top:50px;padding:20px;color:var(--sub);font-size:0.95em;border-top:1px solid var(--border);width:100%;max-width:1000px;text-align:center;}"
-                  ".footer a{color:#ff79c6;text-decoration:none;font-weight:600;}"
+                  ".footer a{color:#79c0ff;text-decoration:none;font-weight:600;}"
                   "</style></head><body>"
                   " <div class='container'>"
                   
@@ -309,7 +309,7 @@ void setup() {
                   "</div>"
 
                   "<script>"
-                  "function toggleTile(el) { el.classList.toggle('active'); const cb = el.querySelector('input'); cb.checked = !cb.checked; }"
+                  "function toggleTile(el) { el.classList.toggle('active'); const cb = el.querySelector('input'); cb.checked = !cb.checked; document.getElementById('mainForm').submit(); }"
                   "const canvas = document.getElementById('paintCanvas');"
                   "const ctx = canvas.getContext('2d');"
                   "const W = 84, H = 16, SCALE = 10;"
