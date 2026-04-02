@@ -158,33 +158,24 @@ void Adafruit_Pixel::setBrightness(uint8_t level)
 
 void Adafruit_Pixel::addBlockToDrawBuffer(uint16_t currCount, uint16_t &currByte, uint8_t &currNibble)
 {
-    if (currCount > 15)
+    while (currCount > 15)
     {
-        uint8_t requiredZeroes = currCount / 15;
-        currByte += requiredZeroes / 2;
-        if (requiredZeroes % 2)
-        {
-            currNibble++;
-            if (currNibble == 2)
-            {
-                currNibble = 0;
-                currByte++;
-            }
-        }
-        uint8_t leftover = currCount % 15;
+        // Add a zero nibble (means 15 dots of SAME color, NO toggle)
         if (currNibble == 0)
         {
-            _drawBuffer[currByte] |= (leftover << 4);
+            _drawBuffer[currByte] |= (0 << 4);
             currNibble++;
         }
         else
         {
-            _drawBuffer[currByte] |= leftover;
+            _drawBuffer[currByte] |= 0;
             currNibble = 0;
             currByte++;
         }
+        currCount -= 15;
     }
-    else
+
+    if (currCount > 0)
     {
         if (currNibble == 0)
         {
