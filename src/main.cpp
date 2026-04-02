@@ -278,9 +278,13 @@ void setup() {
                   " <div class='section-title'>Drawing Board</div>"
                   " <div class='board-card'>"
                   "  <div class='canvas-wrapper'><canvas id='paintCanvas' width='840' height='160'></canvas></div>"
+                  "  <div style='display:flex; gap:10px; margin-bottom:10px;'>"
+                  "    <button type='button' id='pencilBtn' class='btn btn-blue' style='flex:1' onclick='setTool(1)'>PENCIL</button>"
+                  "    <button type='button' id='eraserBtn' class='btn btn-red' style='flex:1; opacity:0.5' onclick='setTool(0)'>ERASER</button>"
+                  "  </div>"
                   "  <div style='display:flex; gap:10px;'>"
-                  "    <button type='button' class='btn btn-red' style='flex:1' onclick='clearCanvas()'>CLEAR</button>"
-                  "    <button type='button' class='btn btn-blue' style='flex:2' onclick='saveCanvas()'>SAVE PERMANENTLY</button>"
+                  "    <button type='button' class='btn btn-red' style='flex:1' onclick='clearCanvas()'>CLEAR BOARD</button>"
+                  "    <button type='button' class='btn btn-blue' style='flex:2' onclick='saveCanvas()'>SAVE AS PERMANENT</button>"
                   "  </div>"
                   " </div>"
 
@@ -313,7 +317,7 @@ void setup() {
                   "const canvas = document.getElementById('paintCanvas');"
                   "const ctx = canvas.getContext('2d');"
                   "const W = 84, H = 16, SCALE = 10;"
-                  "let drawing = false; let lastX = -1, lastY = -1;"
+                  "let drawing = false; let lastX = -1, lastY = -1; let tool = 1;"
                   "let boardRaw = " + boardData + ";"
                   "let board = Array(W).fill(0).map((_, x) => Array(H).fill(0).map((_, y) => (boardRaw[x] & (1 << y)) ? 1 : 0));"
                   
@@ -333,13 +337,14 @@ void setup() {
                   "  fetch(`/api/draw?x=${x}&y=${y}&on=${on}`);"
                   "}"
 
+                  "function setTool(t){tool=t;document.getElementById('pencilBtn').style.opacity=t===1?'1':'0.5';document.getElementById('eraserBtn').style.opacity=t===0?'1':'0.5';}"
                   "function handleMove(e) {"
                   "  if (!drawing) return;"
                   "  const rect = canvas.getBoundingClientRect();"
                   "  const ev = (e.touches && e.touches[0]) || e;"
                   "  const x = Math.floor((ev.clientX - rect.left) / (rect.width / W));"
                   "  const y = Math.floor((ev.clientY - rect.top) / (rect.height / H));"
-                  "  if (x !== lastX || y !== lastY) { setPixel(x, y, 1); lastX = x; lastY = y; }"
+                  "  if (x !== lastX || y !== lastY) { setPixel(x, y, tool); lastX = x; lastY = y; }"
                   "}"
 
                   "canvas.onmousedown = (e) => { drawing = true; handleMove(e); };"
@@ -349,7 +354,7 @@ void setup() {
                   "canvas.addEventListener('touchmove', (e) => { handleMove(e); e.preventDefault(); }, {passive:false});"
                   "canvas.addEventListener('touchend', () => { drawing = false; });"
 
-                  "function clearCanvas() { if(confirm('Clear all?')) { fetch('/api/draw?clear=1').then(() => { board.forEach(c => c.fill(0)); initBoard(); }); } }"
+                  "function clearCanvas() { fetch('/api/draw?clear=1').then(() => { board.forEach(c => c.fill(0)); initBoard(); }); }"
                   "function saveCanvas() { fetch('/api/draw?save=1').then(() => alert('Successfully saved to Flash! 🏮')); }"
 
                   "let playlist = " + playlistJson + ";"
