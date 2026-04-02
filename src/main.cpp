@@ -31,6 +31,7 @@ bool showAnalogClock = true;
 bool showCombine = true;
 bool showDrawing = true;
 bool systemOn = true;
+bool showNightMode = true;
 int rotationSpeed = 20; 
 uint16_t drawBoard[84]; 
 bool forceRefresh = false;
@@ -84,6 +85,7 @@ void saveConfig() {
     f.println(showCombine);
     f.println(showDrawing);
     f.println(systemOn);
+    f.println(showNightMode);
     f.println(rotationSpeed);
     for (int i = 0; i < 84; i++) f.println(drawBoard[i]);
     for (const String& s : playlist) {
@@ -106,6 +108,7 @@ void loadConfig() {
       showCombine = f.readStringUntil('\n').toInt();
       showDrawing = f.readStringUntil('\n').toInt();
       systemOn = f.readStringUntil('\n').toInt();
+      showNightMode = f.readStringUntil('\n').toInt();
       String rotStr = f.readStringUntil('\n');
       rotStr.trim();
       if (rotStr.length() > 0) rotationSpeed = rotStr.toInt();
@@ -253,19 +256,25 @@ void setup() {
                   ".btn:hover{filter:brightness(1.2);}"
                   
                   ".speed-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;margin-top:20px;}"
+                  ".switch{position:relative;display:inline-block;width:40px;height:22px;}.switch input{opacity:0;width:0;height:0;}"
+                  ".slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#30363d;transition:.3s;border-radius:22px;border:1px solid var(--border);}"
+                  ".slider:before{position:absolute;content:\"\";height:14px;width:14px;left:3px;bottom:3px;background:var(--sub);transition:.3s;border-radius:50%;}"
+                  "input:checked+.slider{background:rgba(35,134,54,0.1);border-color:var(--green);}input:checked+.slider:before{transform:translateX(18px);background:var(--green);}"
                   ".footer{margin-top:50px;padding:20px;color:var(--sub);font-size:0.95em;border-top:1px solid var(--border);width:100%;max-width:1000px;text-align:center;}"
                   ".footer a{color:#79c0ff;text-decoration:none;font-weight:600;}"
                   "</style></head><body>"
                   " <div class='container'>"
                   
-                  " <h1>Smart Flipdot</h1>"
-                  " <div class='subtitle'>Pixel v4.8 | <a href='http://flipdot.local'>flipdot.local</a></div>"
-                  " <div style='display:flex; justify-content:center; margin-bottom:20px;'>"
-                  "  <button type='button' class='btn " + String(systemOn?"btn-green":"btn-red") + "' style='width:auto; padding:8px 20px; font-size:0.9em' onclick='togglePower()'>" + (systemOn?"SYSTEM ON":"SYSTEM OFF") + "</button>"
+                  " <div style='display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:5px;'>"
+                  "  <h1 style='text-align:left;margin:0;'>Smart Flipdot</h1>"
+                  "  <label class='switch'><input type='checkbox' id='pwr' " + String(systemOn?"checked":"") + " onclick='togglePower()'><span class='slider'></span></label>"
                   " </div>"
+                  " <div class='subtitle' style='text-align:left;'>Pixel v4.9 | <a href='http://flipdot.local'>flipdot.local</a></div>"
                   " <form action='/save' method='POST' id='mainForm'>"
                   " <div class='section-title'>Control Panel</div>"
                   " <div class='tile-grid'>"
+                  "  <div class='tile " + String(showNightMode?"active":"") + "' onclick='toggleTile(this)'>"
+                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'/></svg></div><span class='label'>Night Mode</span><input type='checkbox' name='c8' " + String(showNightMode?"checked":"") + "></div>"
                   "  <div class='tile " + String(showClock?"active":"") + "' onclick='toggleTile(this)'>"
                   "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></div><span class='label'>Digital</span><input type='checkbox' name='c1' " + String(showClock?"checked":"") + "></div>"
                   "  <div class='tile " + String(showAnalogClock?"active":"") + "' onclick='toggleTile(this)'>"
@@ -393,6 +402,7 @@ void setup() {
     showAnalogClock = request->hasParam("c5", true);
     showCombine = request->hasParam("c6", true);
     showDrawing = request->hasParam("c7", true);
+    showNightMode = request->hasParam("c8", true);
     if (request->hasParam("speed", true)) rotationSpeed = request->getParam("speed", true)->value().toInt();
     if (rotationSpeed < 2) rotationSpeed = 2;
 
@@ -555,16 +565,16 @@ void loop() {
 
   // Schedules
   int currentInterval = rotationSpeed * 1000;
-  bool night = (h >= 22 || h < 5);
+  bool nightActive = (h >= 22 || h < 5) && showNightMode;
   bool morningStatic = (h >= 5 && h < 7);
   bool morningRotate = (h == 7 && m < 15);
 
-  if (night || morningStatic) {
+  if (nightActive || morningStatic) {
     if (millis() - lastToggle > 60000 || forceRefresh) { 
       lastToggle = millis(); forceRefresh = false;
       Pixel_GFX.selectBuffer(0); Pixel_GFX.fillScreen(0);
       u8g2_gfx.setFont(u8g2_font_unifont_t_polish);
-      drawUTF8Centered(night ? "Goodnight!" : "Morning!", 13);
+      drawUTF8Centered(nightActive ? "Goodnight!" : "Morning!", 13);
       Pixel_GFX.commitBufferToPage(0);
     }
     return;
@@ -580,12 +590,13 @@ void loop() {
     int attempts = 0;
     while (attempts < 20) {
         masterIdx = (masterIdx + 1) % (6 + playlist.size());
-        if (morningRotate) { // Overrule rotation
+        if (morningRotate) { 
            static int rotatePart = 0;
-           rotatePart = (rotatePart + 1) % 3;
+           rotatePart = (rotatePart + 1) % 4;
            if (rotatePart == 0) { u8g2_gfx.setFont(FONT_TEXT); toShow = "Morning!"; break; }
            if (rotatePart == 1) { u8g2_gfx.setFont(FONT_CLOCK); toShow = timeStr; break; }
-           if (rotatePart == 2) { u8g2_gfx.setFont(FONT_DATE); toShow = dateStr; break; }
+           if (rotatePart == 2 && currentWeather.valid) { masterIdx = 2; break; } // Show Weather
+           if (rotatePart == 3) { u8g2_gfx.setFont(FONT_DATE); toShow = dateStr; break; }
         }
         
         if (masterIdx == 0 && showClock) { u8g2_gfx.setFont(FONT_CLOCK); toShow = timeStr; break; }
