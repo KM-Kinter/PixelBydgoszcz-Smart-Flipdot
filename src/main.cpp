@@ -332,14 +332,14 @@ void loop() {
         String t = String(buf);
         int w = u8g2_gfx.getUTF8Width(t.c_str());
         
-        // Draw temperature (centered vertically in the 16px space)
-        u8g2_gfx.setCursor(20, 15); 
+        // Draw temperature (centered vertically: baseline adjusted from 15 to 13)
+        u8g2_gfx.setCursor(20, 13); 
         u8g2_gfx.print(t);
         
         // Draw professional degree symbol and 'C'
         int degX = 20 + w + 1;
-        Pixel_GFX.drawCircle(degX + 1, 5, 1, 1);
-        u8g2_gfx.setCursor(degX + 5, 15);
+        Pixel_GFX.drawCircle(degX + 1, 3, 1, 1);
+        u8g2_gfx.setCursor(degX + 5, 13);
         u8g2_gfx.print("C");
         
         Pixel_GFX.commitBufferToPage(0);
