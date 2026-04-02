@@ -4,12 +4,17 @@ A high-fidelity weather and clock display system for ESP32-controlled flipdot bo
 
 ## Features
 
-- **Precision Clock**: Synchronized via NTP (Network Time Protocol) for reliable, to-the-second accuracy, supporting 24h format.
+- **Multi-Mode Clock**:
+    - **Digital**: Precise NTP-synced time.
+    - **Analog**: Classic clock face rendering.
+    - **Combine**: Hybrid mode (Analog left, Digital right).
+- **Interactive Drawing Board**: Real-time 84x16 `<canvas>` painting interface with Eraser tool and Flash persistence.
+- **Conway's Game of Life**: Cellular automation simulation with stagnation detection and automatic re-seeding. It's on a separate branch because it doesn't work well yet.
 - **Dynamic Calendar**: Automated date tracking.
-- **Real-time Weather**: Synchronized with Open-Meteo API for accurate local conditions.
-- **Professional Iconography**: Includes a custom library of 22 professional 16x16 weather icons.
-- **Optimized UI**: Pixel-perfect typography and layout designed specifically for flipdot resolution.
-- **Web Dashboard**: Integrated configuration portal for managing rotation speed and display modes.
+- **Real-time Weather**: Open-Meteo API integration with a custom library of 22 professional 16x16 weather icons.
+- **Message Editor**: Dynamic playlist for custom scrolling or fixed text messages.
+- **Web Dashboard**: Sleek, grid-based UI with SVG iconography and auto-submit controls.
+- **Hardware Optimization**: ADC-safe random seed generation to prevent WiFi/ADC2 conflicts on ESP32.
 - **Day/Night Modes**: Dynamic icon mapping based on sun/moon status and wind speed.
 
 ## Hardware Requirements
