@@ -319,30 +319,18 @@ void loop() {
     }
 
     if (masterIdx == 2 && showWeather && currentWeather.valid) {
-        Serial.println("Updating display: Weather Gallery");
+        Serial.println("Updating display: Weather");
         Pixel_GFX.selectBuffer(0);
         Pixel_GFX.fillScreen(0);
         
-        static const uint8_t* gallery[] = {
-            sun_bits, moon_bits, cloud_bits, clouds_bits, cloud_sun_bits, cloud_moon_bits,
-            cloud_wind_bits, cloud_wind_sun_bits, cloud_wind_moon_bits,
-            rain0_bits, rain0_sun_bits, rain1_bits, rain1_sun_bits, rain1_moon_bits, rain2_bits,
-            lightning_bits, rain_lightning_bits, snou_bits, snow_sun_bits, snow_moon_bits,
-            rain_snow_bits, wind_bits
-        };
-        const int totalIcons = 22;
-        static int batch = 0;
-        static long lastBatchChange = 0;
+        const uint8_t* icon = WeatherHelper::getIconForCode(currentWeather.code, currentWeather.is_day, currentWeather.wind_speed);
+        Pixel_GFX.drawXBitmap(2, 0, icon, 16, 16, 1);
         
-        if (millis() - lastBatchChange > 10000) {
-            batch = (batch + 1) % 8; // 8 batches (7*3 + 1)
-            lastBatchChange = millis();
-        }
-
-        int startIdx = batch * 3;
-        for (int i = 0; i < 3 && (startIdx + i) < totalIcons; i++) {
-            Pixel_GFX.drawXBitmap(2 + i*25, 0, gallery[startIdx + i], 16, 16, 1);
-        }
+        u8g2_gfx.setFont(u8g2_font_logisoso16_tf);
+        String t = String((int)round(currentWeather.temp)) + "C";
+        int w = u8g2_gfx.getUTF8Width(t.c_str());
+        u8g2_gfx.setCursor(45 - w/2 + 18, 16); 
+        u8g2_gfx.print(t);
         
         Pixel_GFX.commitBufferToPage(0);
         delay(200);
