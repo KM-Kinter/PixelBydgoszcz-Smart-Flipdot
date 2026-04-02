@@ -71,7 +71,7 @@ void loop() {
     lastToggle = millis();
     showTime = !showTime;
     
-    String toShow = showTime ? String(timeStr) : String(dateStr);
+    String toShow = String(timeStr);
     
     Pixel_GFX.selectBuffer(0);
     Pixel_GFX.fillScreen(0);
