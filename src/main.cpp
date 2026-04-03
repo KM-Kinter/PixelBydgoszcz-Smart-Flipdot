@@ -291,8 +291,13 @@ void setup() {
     showCombine = request->hasParam("c6", true);
     showDrawing = request->hasParam("c7", true);
     showNightMode = request->hasParam("c8", true);
-    if (request->hasParam("speed", true)) rotationSpeed = request->getParam("speed", true)->value().toInt();
-    if (rotationSpeed < 2) rotationSpeed = 2;
+    if (request->hasParam("speed", true)) {
+        String val = request->getParam("speed", true)->value();
+        if (val.length() > 0) {
+            rotationSpeed = val.toInt();
+            if (rotationSpeed < 2) rotationSpeed = 2;
+        }
+    }
 
     if (request->hasParam("msgs", true)) {
         String msgs = request->getParam("msgs", true)->value();

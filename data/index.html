@@ -51,7 +51,7 @@ input:checked+.slider{background:rgba(63,185,80,0.2);border-color:#3fb950;}input
   </div>
  </div>
  <div class="subtitle" style="text-align:left;">Pixel v{{VERSION}} | <a href="http://flipdot.local">flipdot.local</a></div>
- <form action="/save" method="POST" id="mainForm">
+ <form id="mainForm" action="/save" method="POST" onsubmit="updateSpeed()">
  <div class="section-title">Control Panel</div>
  <div class="tile-grid">
    <div class="tile {{C1_ACT}}" onclick="toggleTile(this)">
