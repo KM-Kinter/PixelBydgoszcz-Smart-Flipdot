@@ -35,6 +35,9 @@ bool showNightMode = true;
 int rotationSpeed = 20; 
 uint16_t drawBoard[84]; 
 bool forceRefresh = false;
+uint32_t timerTarget = 0;
+String timerMsg = "";
+bool timerRunning = false;
 
 WeatherData currentWeather = {0, 0, false};
 uint32_t lastWeatherUpdate = 0;
@@ -206,6 +209,15 @@ void setup() {
   Serial.println(" OK");
   forceRefresh = true;
 
+  server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
+    if(request->hasParam("m")) timerTarget = millis() + request->getParam("m")->value().toInt() * 60000;
+    if(request->hasParam("msg")) timerMsg = request->getParam("msg")->value();
+    timerRunning = true; request->send(200, "text/plain", "OK");
+  });
+  server.on("/timerStop", HTTP_GET, [](AsyncWebServerRequest *request){
+    timerRunning = false; request->send(200, "text/plain", "OK");
+  });
+
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     String playlistJson = "[";
     for (size_t i=0; i<playlist.size(); i++) {
@@ -323,6 +335,18 @@ void setup() {
                   "  </div>"
                   " </div>"
 
+                  " <div class='section-title'>Countdown Timer</div>"
+                  " <div class='speed-card' style='flex-direction:column; gap:12px; align-items:stretch;'>"
+                  "  <div style='display:flex; gap:10px;'>"
+                  "   <input type='number' id='tm' placeholder='Min' style='width:70px; margin:0;'>"
+                  "   <input type='text' id='tmsg' placeholder='Msg (e.g. PIZZA!)' style='flex:1; margin:0;'>"
+                  "  </div>"
+                  "  <div style='display:flex; gap:10px;'>"
+                  "   <button type='button' class='btn btn-blue' onclick='stT()'>START</button>"
+                  "   <button type='button' class='btn btn-red' style='width:auto;' onclick='spT()'>STOP</button>"
+                  "  </div>"
+                  " </div>"
+                  
                   " <div class='section-title'>General Settings</div>"
                   " <div class='speed-card'>"
                   "  <span style='font-weight:600'>Rotation speed (seconds):</span>"
@@ -395,6 +419,8 @@ void setup() {
                   "function delMsg(i){playlist.splice(i,1);render();}"
                   "document.getElementById('newMsg').addEventListener('keypress',(e)=>{if(e.key==='Enter'){e.preventDefault();addMsg();}});"
                   "function togglePower(){const n=! " + String(systemOn?"true":"false") + "; fetch('/api/power?on='+(n?1:0)).then(()=>location.reload());}"
+"function stT(){fetch('/timer?m='+document.getElementById('tm').value+'&msg='+encodeURIComponent(document.getElementById('tmsg').value)).then(()=>location.reload());}"
+"function spT(){fetch('/timerStop').then(()=>location.reload());}"
 "window.addEventListener('load',()=>{loadGallery();initBoard();render();});"
                   "</script></body></html>";
     request->send(200, "text/html", html);
@@ -568,6 +594,19 @@ void loop() {
   int m = timeinfo->tm_min;
 
   if (!systemOn) { forceRefresh = false; return; }
+
+  if (timerRunning) {
+    uint32_t now = millis();
+    Pixel_GFX.selectBuffer(0); Pixel_GFX.fillScreen(0);
+    if (now < timerTarget) {
+      uint32_t rem = (timerTarget - now) / 1000;
+      char buf[10]; snprintf(buf, sizeof(buf), "%02d:%02d", rem/60, rem%60);
+      u8g2_gfx.setFont(FONT_CLOCK); drawUTF8Centered(buf, 15);
+    } else {
+      u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 11);
+    }
+    Pixel_GFX.commitBufferToPage(0); delay(500); return;
+  }
 
   static int lastAutoNight = -1;
   if (h == 22 && lastAutoNight != timeinfo->tm_mday) {
