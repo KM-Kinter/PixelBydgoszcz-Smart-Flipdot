@@ -35,6 +35,10 @@ bool showNightMode = true;
 int rotationSpeed = 20; 
 uint16_t drawBoard[84]; 
 bool forceRefresh = false;
+uint32_t timerTarget = 0;
+String timerMsg = "";
+bool timerRunning = false;
+int timerPhase = 0;
 
 WeatherData currentWeather = {0, 0, false};
 uint32_t lastWeatherUpdate = 0;
@@ -206,6 +210,19 @@ void setup() {
   Serial.println(" OK");
   forceRefresh = true;
 
+  server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
+    uint32_t ms = 0;
+    if(request->hasParam("h")) ms += request->getParam("h")->value().toInt() * 3600000;
+    if(request->hasParam("m")) ms += request->getParam("m")->value().toInt() * 60000;
+    if(request->hasParam("s")) ms += request->getParam("s")->value().toInt() * 1000;
+    timerTarget = millis() + ms;
+    if(request->hasParam("msg")) timerMsg = request->getParam("msg")->value();
+    timerRunning = true; timerPhase = 0; request->send(200, "text/plain", "OK");
+  });
+  server.on("/timerStop", HTTP_GET, [](AsyncWebServerRequest *request){
+    timerRunning = false; request->send(200, "text/plain", "OK");
+  });
+
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     String playlistJson = "[";
     for (size_t i=0; i<playlist.size(); i++) {
@@ -258,10 +275,12 @@ void setup() {
                   ".btn:hover{filter:brightness(1.2);}"
                   
                   ".speed-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;margin-top:20px;}"
-                  ".switch{position:relative;display:inline-block;width:40px;height:22px;}.switch input{opacity:0;width:0;height:0;}"
-                  ".slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(248,81,73,0.1);transition:.3s;border-radius:22px;border:1px solid var(--red);}"
-                  ".slider:before{position:absolute;content:\"\";height:14px;width:14px;left:3px;bottom:3px;background:var(--red);transition:.3s;border-radius:50%;}"
-                  "input:checked+.slider{background:rgba(35,134,54,0.1);border-color:var(--green);}input:checked+.slider:before{transform:translateX(18px);background:var(--green);}"
+                  ".switch{position:relative;display:inline-block;width:50px;height:28px;}.switch input{opacity:0;width:0;height:0;}"
+                  ".slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(248,81,73,0.1);transition:.3s;border-radius:28px;border:1px solid var(--red);}"
+                  ".slider:before{position:absolute;content:\"\";height:20px;width:20px;left:3px;bottom:3px;background:var(--red);transition:.3s;border-radius:50%;}"
+                  "input:checked+.slider{background:rgba(63,185,80,0.2);border-color:#3fb950;}input:checked+.slider:before{transform:translateX(22px);background:#3fb950;}"
+                  ".btn-trash{background:var(--red);color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:0.2s;}"
+                  ".btn-trash:hover{background:#ff615a;transform:scale(1.05);}.btn-trash svg{width:16px;height:16px;stroke:white;}"
                   ".footer{margin-top:50px;padding:20px;color:var(--sub);font-size:0.95em;border-top:1px solid var(--border);width:100%;max-width:1000px;text-align:center;}"
                   ".footer a{color:#79c0ff;text-decoration:none;font-weight:600;}"
                   "</style></head><body>"
@@ -270,21 +289,21 @@ void setup() {
                   " <div style='display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:5px;'>"
                   "  <h1 style='text-align:left;margin:0;'>Smart Flipdot</h1>"
                   "  <div style='display:flex;align-items:center;gap:6px;'>"
-                  "    <span style='font-size:0.7em;color:var(--sub);font-weight:bold;'>OFF</span>"
+                  "    <span style='font-size:0.8em;color:var(--sub);font-weight:bold;'>OFF</span>"
                   "    <label class='switch'><input type='checkbox' id='pwr' " + String(systemOn?"checked":"") + " onclick='togglePower()'><span class='slider'></span></label>"
-                  "    <span style='font-size:0.7em;color:var(--sub);font-weight:bold;'>ON</span>"
+                  "    <span style='font-size:0.8em;color:var(--sub);font-weight:bold;'>ON</span>"
                   "  </div>"
                   " </div>"
-                  " <div class='subtitle' style='text-align:left;'>Pixel v4.9 | <a href='http://flipdot.local'>flipdot.local</a></div>"
+                  " <div class='subtitle' style='text-align:left;'>Pixel v5.4 | <a href='http://flipdot.local'>flipdot.local</a></div>"
                   " <form action='/save' method='POST' id='mainForm'>"
                   " <div class='section-title'>Control Panel</div>"
                   " <div class='tile-grid'>"
                   "  <div class='tile " + String(showClock?"active":"") + "' onclick='toggleTile(this)'>"
-                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></div><span class='label'>Digital</span><input type='checkbox' name='c1' " + String(showClock?"checked":"") + "></div>"
+                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10' stroke-width='2.5'/><path d='M12 7v5l4 2' stroke-width='2.5'/><path d='M12 2v2M12 20v2M20 12h2M2 12h2' stroke-width='1.5'/></svg></div><span class='label'>Digital</span><input type='checkbox' name='c1' " + String(showClock?"checked":"") + "></div>"
                   "  <div class='tile " + String(showAnalogClock?"active":"") + "' onclick='toggleTile(this)'>"
-                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M12 6v6l4 2'/><path d='M16.2 7.8l-1.3 1.3'/><path d='M7.8 7.8l1.3 1.3'/></svg></div><span class='label'>Analog</span><input type='checkbox' name='c5' " + String(showAnalogClock?"checked":"") + "></div>"
+                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10' stroke-width='2.5'/><path d='M12 7v5l4 2' stroke-width='2.5'/><path d='M12 2v2M12 20v2M20 12h2M2 12h2' stroke-width='1.5'/></svg></div><span class='label'>Analog</span><input type='checkbox' name='c5' " + String(showAnalogClock?"checked":"") + "></div>"
                   "  <div class='tile " + String(showCombine?"active":"") + "' onclick='toggleTile(this)'>"
-                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2v20'/><path d='M2 12h20'/><circle cx='12' cy='12' r='10'/></svg></div><span class='label'>Combine</span><input type='checkbox' name='c6' " + String(showCombine?"checked":"") + "></div>"
+                  "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10' stroke-width='2.5'/><path d='M12 7v5l4 2' stroke-width='2.5'/><path d='M12 2v2M12 20v2M20 12h2M2 12h2' stroke-width='1.5'/></svg></div><span class='label'>Combine</span><input type='checkbox' name='c6' " + String(showCombine?"checked":"") + "></div>"
                   "  <div class='tile " + String(showDrawing?"active":"") + "' onclick='toggleTile(this)'>"
                   "    <div class='icon'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 19l7-7 3 3-7 7-3-3z'/><path d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/><path d='M2 2l5 5'/><circle cx='12' cy='12' r='1'/></svg></div><span class='label'>Drawing</span><input type='checkbox' name='c7' " + String(showDrawing?"checked":"") + "></div>"
                   "  <div class='tile " + String(showDate?"active":"") + "' onclick='toggleTile(this)'>"
@@ -314,19 +333,40 @@ void setup() {
                   "  </div>"
                   " </div>"
                   
-                  " <div class='section-title'>Message Editor</div>"
-                  " <div class='msg-card'>"
-                  "  <div id='msgList'></div>"
-                  "  <div style='margin-top:20px; display:flex; gap:10px;'>"
+                  " <div style='display:flex; flex-wrap:wrap; gap:20px; width:100%;'>"
+                  "  <div class='msg-card' style='flex:1.2; min-width:300px; margin:0;'>"
+                  "   <div class='section-title' style='margin-top:0'>Message Editor</div>"
+                  "   <div id='msgList'></div>"
+                  "   <div style='margin-top:20px; display:flex; gap:10px;'>"
                   "    <input type='text' id='newMsg' placeholder='Write something...' style='margin:0'>"
-                  "    <button type='button' class='btn btn-blue' onclick='addMsg()' style='width:120px'>ADD</button>"
+                  "    <button type='button' class='btn btn-blue' onclick='addMsg()' style='width:100px'>ADD</button>"
+                  "   </div>"
+                  "  </div>"
+
+                  "  <div class='speed-card' style='flex:1; min-width:300px; margin:0; flex-direction:column; gap:12px; align-items:stretch;'>"
+                  "   <div class='section-title' style='margin-top:0'>Countdown Timer</div>"
+                  "   <div style='display:flex; gap:8px;'>"
+                  "    <input type='number' id='th' placeholder='H' style='flex:1; margin:0; text-align:center;'>"
+                  "    <input type='number' id='tm' placeholder='M' style='flex:1; margin:0; text-align:center;'>"
+                  "    <input type='number' id='ts' placeholder='S' style='flex:1; margin:0; text-align:center;'>"
+                  "   </div>"
+                  "   <input type='text' id='tmsg' placeholder='Message...' style='width:100%; margin:0;'>"
+                  "   <div style='display:grid; grid-template-columns: 1fr 100px; gap:10px;'>"
+                  "    <button type='button' class='btn btn-blue' onclick='stT()'>START</button>"
+                  "    <button type='button' class='btn btn-red' style='background:var(--red); color:white; border:none;' onclick='spT()'>STOP</button>"
+                  "   </div>"
                   "  </div>"
                   " </div>"
-
+                  
                   " <div class='section-title'>General Settings</div>"
                   " <div class='speed-card'>"
-                  "  <span style='font-weight:600'>Rotation speed (seconds):</span>"
-                  "  <input type='number' name='speed' value='" + String(rotationSpeed) + "' style='width:100px;margin:0;text-align:center;'>"
+                  "  <span style='font-weight:600'>Rotation speed:</span>"
+                  "  <div style='display:flex; gap:8px;'>"
+                  "   <input type='number' id='sh' placeholder='H' style='width:60px; margin:0; text-align:center;'>"
+                  "   <input type='number' id='sm' placeholder='M' style='width:60px; margin:0; text-align:center;'>"
+                  "   <input type='number' id='ss' placeholder='S' style='width:60px; margin:0; text-align:center;'>"
+                  "  </div>"
+                  "  <input type='hidden' name='speed' id='totalSpeed'>"
                   " </div>"
 
                   " <input type='hidden' name='msgs' id='msgsInput'>"
@@ -339,7 +379,9 @@ void setup() {
                   "</div>"
 
                   "<script>"
-                  "function toggleTile(el) { el.classList.toggle('active'); const cb = el.querySelector('input'); cb.checked = !cb.checked; document.getElementById('mainForm').submit(); }"
+                  "function updateSpeed(){const h=document.getElementById('sh').value||0,m=document.getElementById('sm').value||0,s=document.getElementById('ss').value||0; document.getElementById('totalSpeed').value = parseInt(h)*3600 + parseInt(m)*60 + parseInt(s);}"
+                  "function toggleTile(el) { el.classList.toggle('active'); const cb = el.querySelector('input'); cb.checked = !cb.checked; updateSpeed(); document.getElementById('mainForm').submit(); }"
+                  "const TRASH_SVG = `<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/></svg>`;"
                   "const canvas = document.getElementById('paintCanvas');"
                   "const ctx = canvas.getContext('2d');"
                   "const W = 84, H = 16, SCALE = 10;"
@@ -372,9 +414,9 @@ void setup() {
                   "function saveAsNew(){const n=document.getElementById('boardName').value; if(!n)alert('Name req'); else fetch('/api/boards/save?name='+encodeURIComponent(n)).then(()=>loadGallery());}"
                   "function loadGallery(){fetch('/api/boards/list').then(r=>r.json()).then(data=>{const g=document.getElementById('gallery');g.innerHTML='';data.forEach(n=>{"
                   "  const d=document.createElement('div');d.className='list-item';d.style.padding='8px 12px';d.style.margin='0';"
-                  "  d.innerHTML='<span style=\"font-size:0.9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px\">'+n+'</span>'+"
-                  "    '<div style=\"display:flex;gap:5px\"><button type=\"button\" onclick=\"loadBoard(\\''+n+'\\')\" style=\"background:var(--blue);border:none;border-radius:4px;padding:4px;cursor:pointer;display:flex\"><svg style=\"width:14px;height:14px;stroke:#fff\" viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"/></svg></button>'+"
-                  "    '<button type=\"button\" onclick=\"deleteBoard(\\''+n+'\\')\" style=\"background:rgba(248,81,73,0.1);border:1px solid var(--red);border-radius:4px;padding:4px;cursor:pointer;display:flex\"><svg style=\"width:14px;height:14px;stroke:var(--red)\" viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18\"/><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"/><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"/></svg></button></div>';"
+                  "  d.innerHTML='<span style=\"font-size:0.95em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px\">'+n+'</span>'+"
+                  "    `<div style=\"display:flex;gap:8px\"><button type=\"button\" onclick=\"loadBoard('${n}')\" style=\"background:var(--blue);border:none;border-radius:6px;padding:6px;cursor:pointer;display:flex;align-items:center\"><svg style=\"width:16px;height:16px;stroke:#fff\" viewBox=\"0 0 24 24\" fill=\"none\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"/></svg></button>`+"
+                  "    `<button type=\"button\" onclick=\"deleteBoard('${n}')\" class=\"btn-trash\">${TRASH_SVG}</button></div>`;"
                   "  g.appendChild(d);});});}"
                   "function loadBoard(n){fetch('/api/boards/load?name='+encodeURIComponent(n)).then(()=>location.reload());}"
                   "function deleteBoard(n){if(confirm('Delete '+n+'?'))fetch('/api/boards/delete?name='+encodeURIComponent(n)).then(()=>loadGallery());}"
@@ -387,7 +429,7 @@ void setup() {
                   "let playlist = " + playlistJson + ";"
                   "function render(){"
                   "  const l=document.getElementById('msgList');l.innerHTML='';playlist.forEach((m,i)=>{"
-                  "    l.innerHTML+=`<div class='list-item'><span>${m}</span><button type='button' class='del-btn' onclick='delMsg(${i})'>&times;</button></div>`;"
+                  "    l.innerHTML+=`<div class='list-item'><span>${m}</span><button type='button' class='btn-trash' onclick='delMsg(${i})' style='width:36px;height:36px;'>${TRASH_SVG}</button></div>`;"
                   "  });"
                   "  document.getElementById('msgsInput').value=playlist.join('|');"
                   "}"
@@ -395,7 +437,11 @@ void setup() {
                   "function delMsg(i){playlist.splice(i,1);render();}"
                   "document.getElementById('newMsg').addEventListener('keypress',(e)=>{if(e.key==='Enter'){e.preventDefault();addMsg();}});"
                   "function togglePower(){const n=! " + String(systemOn?"true":"false") + "; fetch('/api/power?on='+(n?1:0)).then(()=>location.reload());}"
-"window.addEventListener('load',()=>{loadGallery();initBoard();render();});"
+"function stT(){const h=document.getElementById('th').value||0,m=document.getElementById('tm').value||0,s=document.getElementById('ts').value||0,msg=document.getElementById('tmsg').value;"
+"fetch(`/timer?h=${h}&m=${m}&s=${s}&msg=${encodeURIComponent(msg)}`).then(()=>location.reload());}"
+"function spT(){fetch('/timerStop').then(()=>location.reload());}"
+"window.addEventListener('load',()=>{loadGallery();initBoard();render();"
+"const rs="+String(rotationSpeed)+"; document.getElementById('sh').value=Math.floor(rs/3600)||''; document.getElementById('sm').value=Math.floor((rs%3600)/60)||''; document.getElementById('ss').value=(rs%60)||'';});"
                   "</script></body></html>";
     request->send(200, "text/html", html);
   });
@@ -568,6 +614,31 @@ void loop() {
   int m = timeinfo->tm_min;
 
   if (!systemOn) { forceRefresh = false; return; }
+
+  if (timerRunning) {
+    uint32_t now = millis();
+    Pixel_GFX.selectBuffer(0); Pixel_GFX.fillScreen(0);
+    if (timerPhase == 0) { // Countdown
+      if (now < timerTarget) {
+        uint32_t rem = (timerTarget - now) / 1000;
+        int h = rem / 3600; int m = (rem % 3600) / 60; int s = rem % 60;
+        char buf[12];
+        if (h > 0) snprintf(buf, sizeof(buf), "%02d:%02d:%02d", h, m, s);
+        else snprintf(buf, sizeof(buf), "%02d:%02d", m, s);
+        u8g2_gfx.setFont(FONT_CLOCK); drawUTF8Centered(buf, 16);
+      } else {
+        timerPhase = 1; timerTarget = now + 180000; // 3 minutes
+        forceRefresh = true;
+      }
+    } else { // Message phase
+      if (now < timerTarget) {
+        u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 14); // Standard Y=14
+      } else {
+        timerRunning = false; timerPhase = 0; forceRefresh = true;
+      }
+    }
+    Pixel_GFX.commitBufferToPage(0); delay(500); return;
+  }
 
   static int lastAutoNight = -1;
   if (h == 22 && lastAutoNight != timeinfo->tm_mday) {
