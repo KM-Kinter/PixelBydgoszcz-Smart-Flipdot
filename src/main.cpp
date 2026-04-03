@@ -38,6 +38,7 @@ bool forceRefresh = false;
 uint32_t timerTarget = 0;
 String timerMsg = "";
 bool timerRunning = false;
+int timerPhase = 0;
 
 WeatherData currentWeather = {0, 0, false};
 uint32_t lastWeatherUpdate = 0;
@@ -212,7 +213,7 @@ void setup() {
   server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
     if(request->hasParam("m")) timerTarget = millis() + request->getParam("m")->value().toInt() * 60000;
     if(request->hasParam("msg")) timerMsg = request->getParam("msg")->value();
-    timerRunning = true; request->send(200, "text/plain", "OK");
+    timerRunning = true; timerPhase = 0; request->send(200, "text/plain", "OK");
   });
   server.on("/timerStop", HTTP_GET, [](AsyncWebServerRequest *request){
     timerRunning = false; request->send(200, "text/plain", "OK");
@@ -338,12 +339,12 @@ void setup() {
                   " <div class='section-title'>Countdown Timer</div>"
                   " <div class='speed-card' style='flex-direction:column; gap:12px; align-items:stretch;'>"
                   "  <div style='display:flex; gap:10px;'>"
-                  "   <input type='number' id='tm' placeholder='Min' style='width:70px; margin:0;'>"
-                  "   <input type='text' id='tmsg' placeholder='Msg (e.g. PIZZA!)' style='flex:1; margin:0;'>"
+                  "   <input type='number' id='tm' placeholder='Min' style='width:80px; margin:0;'>"
+                  "   <input type='text' id='tmsg' placeholder='Message (e.g. PIZZA!)' style='flex:1; margin:0;'>"
                   "  </div>"
-                  "  <div style='display:flex; gap:10px;'>"
-                  "   <button type='button' class='btn btn-blue' onclick='stT()'>START</button>"
-                  "   <button type='button' class='btn btn-red' style='width:auto;' onclick='spT()'>STOP</button>"
+                  "  <div style='display:grid; grid-template-columns: 1fr 120px; gap:10px;'>"
+                  "   <button type='button' class='btn btn-blue' onclick='stT()'>START TIMER</button>"
+                  "   <button type='button' class='btn btn-red' style='background:var(--red); color:white; border:none;' onclick='spT()'>STOP</button>"
                   "  </div>"
                   " </div>"
                   
@@ -598,12 +599,21 @@ void loop() {
   if (timerRunning) {
     uint32_t now = millis();
     Pixel_GFX.selectBuffer(0); Pixel_GFX.fillScreen(0);
-    if (now < timerTarget) {
-      uint32_t rem = (timerTarget - now) / 1000;
-      char buf[10]; snprintf(buf, sizeof(buf), "%02d:%02d", rem/60, rem%60);
-      u8g2_gfx.setFont(FONT_CLOCK); drawUTF8Centered(buf, 15);
-    } else {
-      u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 11);
+    if (timerPhase == 0) { // Countdown
+      if (now < timerTarget) {
+        uint32_t rem = (timerTarget - now) / 1000;
+        char buf[10]; snprintf(buf, sizeof(buf), "%02d:%02d", rem/60, rem%60);
+        u8g2_gfx.setFont(FONT_CLOCK); drawUTF8Centered(buf, 16);
+      } else {
+        timerPhase = 1; timerTarget = now + 180000; // 3 minutes
+        forceRefresh = true;
+      }
+    } else { // Message phase
+      if (now < timerTarget) {
+        u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 12);
+      } else {
+        timerRunning = false; timerPhase = 0; forceRefresh = true;
+      }
     }
     Pixel_GFX.commitBufferToPage(0); delay(500); return;
   }
