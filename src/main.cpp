@@ -484,8 +484,13 @@ void loop() {
   }
 
   static int lastAutoNight = -1;
+  static int lastAutoDay = -1;
   if (h == 22 && lastAutoNight != timeinfo->tm_mday) {
     showNightMode = true; lastAutoNight = timeinfo->tm_mday;
+    forceRefresh = true;
+  }
+  if (h >= 5 && h < 22 && lastAutoDay != timeinfo->tm_mday) {
+    showNightMode = false; lastAutoDay = timeinfo->tm_mday;
     forceRefresh = true;
   }
 
