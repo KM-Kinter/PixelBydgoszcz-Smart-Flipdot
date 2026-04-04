@@ -8,6 +8,8 @@
 #include <Adafruit_GFX_Pixel.hpp>
 #include <U8g2_for_Adafruit_GFX.h>
 #include <ElegantOTA.h>
+#include <PubSubClient.h>
+#include "secrets.h"
 
 // --- DEBUG SYSTEM ---
 #ifdef DEBUG_LOGS
@@ -51,6 +53,118 @@ uint32_t timerTarget = 0;
 String timerMsg = "";
 bool timerRunning = false;
 int timerPhase = 0;
+
+// --- FORWARD DECLARATIONS ---
+void saveConfig();
+void publishState();
+void publishDiscovery();
+void mqttReconnect();
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+
+// --- MQTT SYSTEM ---
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
+
+void publishState() {
+  if (!mqtt.connected()) return;
+  mqtt.publish("flipdot/pixel/power/state", systemOn ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c1/state", showClock ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c2/state", showDate ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c3/state", showCustom ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c4/state", showWeather ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c5/state", showAnalogClock ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c6/state", showCombine ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c7/state", showDrawing ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/c8/state", showNightMode ? "ON" : "OFF", true);
+  mqtt.publish("flipdot/pixel/speed/state", String(rotationSpeed).c_str(), true);
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String msg = "";
+  for (unsigned int i = 0; i < length; i++) msg += (char)payload[i];
+  String t = String(topic);
+  
+  if (t.endsWith("/power/set")) systemOn = (msg == "ON");
+  else if (t.endsWith("/c1/set")) showClock = (msg == "ON");
+  else if (t.endsWith("/c2/set")) showDate = (msg == "ON");
+  else if (t.endsWith("/c3/set")) showCustom = (msg == "ON");
+  else if (t.endsWith("/c4/set")) showWeather = (msg == "ON");
+  else if (t.endsWith("/c5/set")) showAnalogClock = (msg == "ON");
+  else if (t.endsWith("/c6/set")) showCombine = (msg == "ON");
+  else if (t.endsWith("/c7/set")) showDrawing = (msg == "ON");
+  else if (t.endsWith("/c8/set")) showNightMode = (msg == "ON");
+  else if (t.endsWith("/speed/set")) {
+    int s = msg.toInt();
+    if (s >= 2) rotationSpeed = s;
+  }
+  
+  saveConfig();
+  forceRefresh = true;
+  publishState();
+}
+
+void publishDiscovery() {
+  DEBUG_PRINTLN("Publishing HASS Discovery...");
+  auto publishEntity = [&](const char* type, const char* id, const char* name, const char* icon) {
+    JsonDocument doc;
+    doc["name"] = name;
+    doc["unique_id"] = "fd_px_" + String(id);
+    doc["stat_t"] = "flipdot/pixel/" + String(id) + "/state";
+    doc["cmd_t"] = "flipdot/pixel/" + String(id) + "/set";
+    if (icon) doc["ic"] = icon;
+    
+    JsonObject dev = doc["device"].to<JsonObject>();
+    dev["ids"][0] = "flipdot_pixel";
+    dev["name"] = "Flipdot Pixel";
+    dev["mf"] = "Kinter";
+    dev["sw"] = "6.0";
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/" + String(type) + "/flipdot_pixel/" + String(id) + "/config";
+    mqtt.publish(topic.c_str(), payload.c_str(), true);
+  };
+
+  publishEntity("switch", "power", "Power", "mdi:power");
+  publishEntity("switch", "c1", "Digital Clock", "mdi:clock-outline");
+  publishEntity("switch", "c2", "Date Display", "mdi:calendar");
+  publishEntity("switch", "c3", "Messages", "mdi:message-text");
+  publishEntity("switch", "c4", "Weather", "mdi:weather-sunny");
+  publishEntity("switch", "c5", "Analog Clock", "mdi:clock-time-four");
+  publishEntity("switch", "c6", "Combine Mode", "mdi:widgets-outline");
+  publishEntity("switch", "c7", "Drawing Board", "mdi:palette");
+  publishEntity("switch", "c8", "Night Mode", "mdi:moon-waning-crescent");
+
+  // Speed
+  JsonDocument sdoc;
+  sdoc["name"] = "Rotation Speed";
+  sdoc["unique_id"] = "fd_px_speed";
+  sdoc["stat_t"] = "flipdot/pixel/speed/state";
+  sdoc["cmd_t"] = "flipdot/pixel/speed/set";
+  sdoc["min"] = 2; sdoc["max"] = 3600; sdoc["step"] = 1; sdoc["unit_of_meas"] = "s";
+  JsonObject sdev = sdoc["device"].to<JsonObject>();
+  sdev["ids"][0] = "flipdot_pixel";
+  String spayload;
+  serializeJson(sdoc, spayload);
+  mqtt.publish("homeassistant/number/flipdot_pixel/speed/config", spayload.c_str(), true);
+}
+
+void mqttReconnect() {
+  static uint32_t lastRetry = 0;
+  if (mqtt.connected()) return;
+  if (millis() - lastRetry < 5000) return;
+  lastRetry = millis();
+
+  DEBUG_PRINT("MQTT Connecting...");
+  if (mqtt.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS)) {
+    DEBUG_PRINTLN("Connected!");
+    mqtt.subscribe("flipdot/pixel/+/set");
+    publishDiscovery();
+    publishState();
+  } else {
+    DEBUG_PRINT("Failed, rc="); DEBUG_PRINTLN(mqtt.state());
+  }
+}
 
 WeatherData currentWeather = {0, 0, false};
 uint32_t lastWeatherUpdate = 0;
@@ -317,6 +431,7 @@ void setup() {
     saveConfig();
     forceRefresh = true;
     request->redirect("/");
+    publishState();
   });
 
   server.on("/api/draw", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -425,10 +540,14 @@ void setup() {
         saveConfig();
         forceRefresh = true;
         request->send(200, "text/plain", "OK");
+        publishState();
     } else {
         request->send(400, "text/plain", "Bad Request");
     }
   });
+
+  mqtt.setServer(MQTT_BROKER, MQTT_PORT);
+  mqtt.setCallback(mqttCallback);
 
   ElegantOTA.begin(&server);
   server.begin();
@@ -436,6 +555,8 @@ void setup() {
 }
 
 void loop() {
+  mqtt.loop();
+  if (WiFi.status() == WL_CONNECTED) mqttReconnect();
   ElegantOTA.loop();
   static uint32_t lastNTP = 0;
   if (millis() - lastNTP > 3600000) { lastNTP = millis(); timeClient.forceUpdate(); }
