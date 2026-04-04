@@ -619,7 +619,7 @@ void loop() {
 
   // Schedules
   int currentInterval = rotationSpeed * 1000;
-  bool nightActive = (h >= 22 || h < 5) && showNightMode;
+  bool nightActive = showNightMode;
   bool morningStatic = (h >= 5 && h < 7);
   bool morningRotate = (h == 7 && m < 15);
 
