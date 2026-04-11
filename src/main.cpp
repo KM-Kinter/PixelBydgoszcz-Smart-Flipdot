@@ -610,7 +610,7 @@ void loop() {
       }
     } else { // Message phase
       if (now < timerTarget) {
-        u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 14); // Standard Y=14
+        u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 13); // Font 10px needs Y=13
       } else {
         timerRunning = false; timerPhase = 0; forceRefresh = true;
       }
@@ -712,7 +712,9 @@ void loop() {
         Pixel_GFX.commitBufferToPage(0);
     } else if (toShow != "") {
       Pixel_GFX.selectBuffer(0); Pixel_GFX.fillScreen(0);
-      int yPos = (u8g2_gfx.getFontAscent() > 13 ? 16 : 14);
+      int yPos = 14;
+      if (u8g2_gfx.getFontAscent() > 13) yPos = 16;
+      else if (u8g2_gfx.getFontAscent() > 8) yPos = 13; // For 10px font, move up 1px to avoid bottom clipping
       drawUTF8Centered(toShow, yPos);
       Pixel_GFX.commitBufferToPage(0);
     }
