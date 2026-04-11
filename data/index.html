@@ -113,13 +113,20 @@ input:checked+.slider{background:rgba(63,185,80,0.2);border-color:#3fb950;}input
  </div>
  <div class="section-title">General Settings</div>
  <div class="speed-card">
-  <span style="font-weight:600">Rotation speed:</span>
+  <span style="font-weight:600">Rotation Speed:</span>
    <div style="display:flex; gap:8px;">
     <input type="number" id="sh" placeholder="H" min="0" style="width:75px; margin:0; text-align:center;">
     <input type="number" id="sm" placeholder="M" min="0" style="width:75px; margin:0; text-align:center;">
     <input type="number" id="ss" placeholder="S" min="0" style="width:75px; margin:0; text-align:center;">
    </div>
   <input type="hidden" name="speed" id="totalSpeed">
+ </div>
+ <div class="speed-card" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+  <span style="font-weight:600">Messages Text Size:</span>
+  <select name="fSize" style="background:var(--bg);color:white;border:1px solid var(--border);padding:8px 12px;border-radius:8px;">
+    <option value="8" {{F8_SEL}}>Small (8px)</option>
+    <option value="10" {{F10_SEL}}>Medium (10px)</option>
+  </select>
  </div>
  <input type="hidden" name="msgs" id="msgsInput">
  <button type="submit" class="btn btn-green">APPLY</button>
