@@ -712,9 +712,8 @@ void loop() {
         Pixel_GFX.commitBufferToPage(0);
     } else if (toShow != "") {
       Pixel_GFX.selectBuffer(0); Pixel_GFX.fillScreen(0);
-      int yPos = 14;
+      int yPos = 13; // Moved up 1px for both 8px and 10px fonts
       if (u8g2_gfx.getFontAscent() > 13) yPos = 16;
-      else if (u8g2_gfx.getFontAscent() > 8) yPos = 13; // For 10px font, move up 1px to avoid bottom clipping
       drawUTF8Centered(toShow, yPos);
       Pixel_GFX.commitBufferToPage(0);
     }
