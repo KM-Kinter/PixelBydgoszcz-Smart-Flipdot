@@ -46,7 +46,8 @@ bool showCombine = true;
 bool showDrawing = true;
 bool systemOn = true;
 bool showNightMode = true;
-int rotationSpeed = 20; 
+int rotationSpeed = 20; // seconds
+int fontSize = 10;      // 8 or 10 
 uint16_t drawBoard[84]; 
 bool forceRefresh = false;
 uint32_t timerTarget = 0;
@@ -170,7 +171,9 @@ WeatherData currentWeather = {0, 0, false};
 uint32_t lastWeatherUpdate = 0;
 
 // Fonts - maximum size for Clock/Date and minimal for Text
-#define FONT_TEXT u8g2_font_unifont_t_polish    // Supports Polish
+#define FONT_TEXT u8g2_font_helvR10_te    // Supports Polish
+// u8g2_font_6x12_te is cool for text and supports polish characters but it's too wide comparing to u8g2_font_helvR08_te
+// u8g2_font_helvR08_te or 10_te supports polish characters
 #define FONT_CLOCK u8g2_font_logisoso16_tn      // Large, 16px high numbers
 #define FONT_DATE u8g2_font_logisoso16_tf       // Large, 16px high proportional
 
@@ -217,6 +220,7 @@ void saveConfig() {
     f.println(systemOn);
     f.println(showNightMode);
     f.println(rotationSpeed);
+    f.println(fontSize);
     for (int i = 0; i < 84; i++) f.println(drawBoard[i]);
     for (const String& s : playlist) {
       if (s.length() > 0) f.println(s);
@@ -241,6 +245,9 @@ void loadConfig() {
       String s9 = f.readStringUntil('\n'); s9.trim(); if(s9.length()>0) showNightMode = s9.toInt(); else showNightMode = true;
       String rotStr = f.readStringUntil('\n'); rotStr.trim();
       if (rotStr.length() > 0) rotationSpeed = rotStr.toInt();
+      
+      String fsStr = f.readStringUntil('\n'); fsStr.trim();
+      if (fsStr.length() > 0) fontSize = fsStr.toInt();
       
       for (int i = 0; i < 84; i++) {
         if (f.available()) drawBoard[i] = f.readStringUntil('\n').toInt();
@@ -356,7 +363,7 @@ void setup() {
     String html = f.readString();
     f.close();
 
-    html.replace("{{VERSION}}", "6.0");
+    html.replace("{{VERSION}}", "7.0");
     html.replace("{{PWR_CHK}}", systemOn ? "checked" : "");
     html.replace("{{PWR_STATE}}", systemOn ? "false" : "true");
     html.replace("{{C1_ACT}}", showClock ? "active" : "");
@@ -392,6 +399,8 @@ void setup() {
     pl += "]";
     html.replace("{{PLAYLIST_DATA}}", pl);
     html.replace("{{ROTATION_SPEED}}", String(rotationSpeed));
+    html.replace("{{F8_SEL}}", fontSize == 8 ? "selected" : "");
+    html.replace("{{F10_SEL}}", fontSize == 10 ? "selected" : "");
 
     request->send(200, "text/html", html);
   });
@@ -413,6 +422,9 @@ void setup() {
             rotationSpeed = val.toInt();
             if (rotationSpeed < 2) rotationSpeed = 2;
         }
+    }
+    if (request->hasParam("fSize", true)) {
+        fontSize = request->getParam("fSize", true)->value().toInt();
     }
 
     if (request->hasParam("msgs", true)) {
@@ -598,7 +610,7 @@ void loop() {
       }
     } else { // Message phase
       if (now < timerTarget) {
-        u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 14); // Standard Y=14
+        u8g2_gfx.setFont(FONT_TEXT); drawUTF8Centered(timerMsg != "" ? timerMsg : "TIME'S UP!", 13); // Font 10px needs Y=13
       } else {
         timerRunning = false; timerPhase = 0; forceRefresh = true;
       }
@@ -683,7 +695,9 @@ void loop() {
                 if (masterIdx >= 6 && showCustom) {
                     int pIdx = masterIdx - 6;
                     if (pIdx >= 0 && pIdx < (int)playlist.size()) { 
-                        renderMode = masterIdx; u8g2_gfx.setFont(FONT_TEXT); toShow = playlist[pIdx]; break; 
+                        renderMode = masterIdx; 
+                        u8g2_gfx.setFont(fontSize == 8 ? u8g2_font_helvR08_te : u8g2_font_helvR10_te);
+                        toShow = playlist[pIdx]; break; 
                     }
                 }
             }
@@ -731,7 +745,8 @@ void loop() {
         Pixel_GFX.commitBufferToPage(0);
     } else if (toShow != "") {
       Pixel_GFX.selectBuffer(0); Pixel_GFX.fillScreen(0);
-      int yPos = (u8g2_gfx.getFontAscent() > 13 ? 16 : 14);
+      int yPos = 13; // Moved up 1px for both 8px and 10px fonts
+      if (u8g2_gfx.getFontAscent() > 13) yPos = 16;
       drawUTF8Centered(toShow, yPos);
       Pixel_GFX.commitBufferToPage(0);
     }
