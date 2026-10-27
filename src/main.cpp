@@ -1,8 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
-#include <NTPClient.h>
-#include <WiFiUdp.h>
+#include <time.h>
 #include <ESPmDNS.h>
 #include <Pixel.hpp>
 #include <Adafruit_GFX_Pixel.hpp>
@@ -31,8 +30,8 @@ PixelClass Pixel(Serial2, 22, 22);
 Adafruit_Pixel Pixel_GFX(Pixel, 84, 1); // Address 1
 U8G2_FOR_ADAFRUIT_GFX u8g2_gfx;
 
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "ntp.nask.pl", 7200); // GMT+2
+// Timezone for Poland (Warsaw): CET-1CEST,M3.5.0,M10.5.0/3 (automatyczna zmiana czasu letni/zimowy)
+const char* const TIMEZONE = "CET-1CEST,M3.5.0,M10.5.0/3";
 AsyncWebServer server(80);
 
 // App Settings
@@ -340,10 +339,17 @@ void setup() {
     MDNS.addService("http", "tcp", 80);
   }
 
-  timeClient.begin();
+  configTzTime(TIMEZONE, "tempus1.gum.gov.pl", "ntp.nask.pl", "pool.ntp.org");
   DEBUG_PRINT("Sync Time");
-  for(int i=0; i<10 && !timeClient.update(); i++){ delay(500); DEBUG_PRINT("."); }
-  DEBUG_PRINTLN(" OK");
+  struct tm timeinfo;
+  for(int i = 0; i < 20 && !getLocalTime(&timeinfo, 500); i++) {
+    DEBUG_PRINT(".");
+  }
+  if (getLocalTime(&timeinfo, 0)) {
+    DEBUG_PRINTLN(" OK");
+  } else {
+    DEBUG_PRINTLN(" Timeout (will sync in background)");
+  }
   forceRefresh = true;
 
   server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -570,16 +576,17 @@ void loop() {
   mqtt.loop();
   if (WiFi.status() == WL_CONNECTED) mqttReconnect();
   ElegantOTA.loop();
-  static uint32_t lastNTP = 0;
-  if (millis() - lastNTP > 3600000) { lastNTP = millis(); timeClient.forceUpdate(); }
-  
   if (WiFi.status() == WL_CONNECTED && (millis() - lastWeatherUpdate > 300000 || lastWeatherUpdate == 0)) {
     lastWeatherUpdate = millis();
     currentWeather = WeatherHelper::getWSWWeather();
   }
   
-  timeClient.update();
-  time_t now = timeClient.getEpochTime();
+  time_t now;
+  time(&now);
+  if (now < 100000) {
+    delay(50);
+    return;
+  }
   struct tm * timeinfo = localtime(&now);
 
   char timeStr[6]; sprintf(timeStr, "%02d:%02d", timeinfo->tm_hour, timeinfo->tm_min);
